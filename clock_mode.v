@@ -52,7 +52,7 @@ input   wire    choose,
 input   wire    num_up,
 input   wire    num_down,
 
-output  wire    clk_load_num,   //用于调试
+output  reg     mode_load_en,   //用于调试
 
 output  wire    stcp,
 output  wire    shcp,
@@ -91,18 +91,23 @@ wire    choose_bs;
 wire    num_up_bs;
 wire    num_down_bs; 
 // 按键消抖模块接口已改为pulse_1ms计数，参数单位为ms
-button_stabilization #(.DEBOUNCE_MS(20))
-                        //load_b_s     (sys_clk, reset, load, load_bs),
-                        choose_b_s   (sys_clk, pulse_1ms, reset, choose, choose_bs),
-                        num_up_b_s   (sys_clk, pulse_1ms, reset, num_up, num_up_bs),
-                        num_down_b_s (sys_clk, pulse_1ms, reset, num_down, num_down_bs);
+// // // button_stabilization #(.DEBOUNCE_MS(20))
+                        // // // //load_b_s     (sys_clk, reset, load, load_bs),
+                        // // // choose_b_s   (sys_clk, pulse_1ms, reset, choose, choose_bs),
+                        // // // num_up_b_s   (sys_clk, pulse_1ms, reset, num_up, num_up_bs),
+                        // // // num_down_b_s (sys_clk, pulse_1ms, reset, num_down, num_down_bs);
 //按键消抖+短按检测（大于20ms小于500ms）+长按3秒检测  
 // 注意！！改变消抖时间和长短按时长，修改实例化时的参数即可，无需关心内部计数          
 wire    load_bs_s;
 wire    load_bs_l;
 // 按键消抖+长短按模块接口已改为pulse_1ms计数，LONG_PRESS_MS单位为ms
-button_stabilization_long_short #(.DEBOUNCE_MS(20), .SHORT_END_MS(500), .LONG_PRESS_MS(3_000)) 
-                                load_b_s_l_s    (sys_clk, pulse_1ms, reset, load, load_bs_s, load_bs_l);
+// // // button_stabilization_long_short #(.DEBOUNCE_MS(20), .SHORT_END_MS(500), .LONG_PRESS_MS(3_000)) 
+                                // // // load_b_s_l_s    (sys_clk, pulse_1ms, reset, load, load_bs_s, load_bs_l);
+                                
+// 为了test bench，取消按键消抖
+assign choose_bs = choose;assign num_up_bs = num_up;assign num_down_bs = num_down;assign load_bs_s = load;assign load_bs_l = 1;
+
+
 
 
 
@@ -122,11 +127,11 @@ button_stabilization_long_short #(.DEBOUNCE_MS(20), .SHORT_END_MS(500), .LONG_PR
 
 //时钟模式、置数模式、闹钟模式使能信号
 reg mode_clock_en = 1'b1;
-reg mode_load_en = 1'b0;
+// reg mode_load_en = 1'b0;// 用于测试，注释掉了-------------------------------------------------------------------------------------------------
 reg mode_alarm_en = 1'b0;
 //对不同模式的输入输出进行使能
 //置数、闹钟模式的输入需要控制，时钟的输入不可控制
-assign  clk_load_num  =   sys_clk &&mode_load_en ;//-------------------------------------------------------------------------------------------------
+assign  clk_load_num  =   sys_clk &&mode_load_en ;//不能这么用门控时钟，已修改，应该已经没用了-------------------------------------------------------------------------------------------------
 assign  choose_load_num   = choose_bs   | (~mode_load_en); // 按键低有效
 assign  num_up_load_num   = num_up_bs   | (~mode_load_en);
 assign  num_down_load_num = num_down_bs | (~mode_load_en);
@@ -149,6 +154,8 @@ wire    ds_load_num;
 wire    oe_load_num;  
 //闹钟模式========================================================================
 
+
+// 输出控制
 assign  stcp = (stcp_clock&&mode_clock_en) || (stcp_load_num&&mode_load_en); //闹钟模式 || (stcp_alarm&&mode_alarm_en);
 assign  shcp = (shcp_clock&&mode_clock_en) || (shcp_load_num&&mode_load_en); //闹钟模式 || (stcp_alarm&&mode_alarm_en);
 assign  ds   = (ds_clock&&mode_clock_en)   || (ds_load_num&&mode_load_en); //闹钟模式   || (stcp_alarm&&mode_alarm_en);
@@ -335,7 +342,8 @@ end
 //时钟模式----实例化
 //时钟的置数信号：无论长按短按都会触发置数（长按、短按均为低电平触发，所以相与后为clock的load输入）
 wire    load_clock;
-assign  load_clock = load_bs_s && load_bs_l;
+// assign  load_clock = load_bs_s && load_bs_l; //???不应该是长按才触发置数吗？=======================================更改============
+assign  load_clock = load_bs_l; 
 wire    [7:0]   data_second;
 wire    [7:0]   data_minute;   
 wire    [7:0]   data_hour;   

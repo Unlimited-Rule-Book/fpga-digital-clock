@@ -1,8 +1,30 @@
-# Tutorial
+# 数显时钟的FPGA开发
 
-This is a tutorial where you will learn how to create Git 
-repositories from your projects and share them on GitHub.
+> 私人项目 - 基于 Verilog 的数显时钟，支持置数模式与闹钟（待实现）。
 
+## 目录
+- [开发环境](#开发环境)
+- [主要功能](#主要功能)
+- [软件架构](#软件架构)
+- [按键映射](#按键映射)
+- [备注](#备注)
+
+## 开发环境
+- 软件：Quartus II
+- 器件：Cyclone IV EP4CE10F17C8N 野火征途Pro开发板
+- 板载时钟：50MHz 晶振
+- 外设：6位数码管（74HC595驱动）、3个独立按键（选择/上调/下调）、1个加载键
+
+## 主要功能
+- ✅ 时钟模式：时分秒正常走时，小数点1Hz闪烁
+- ⏳ 置数模式：长按加载键进入，可分别设置时/分/秒，16秒无操作自动退出
+- ⏳ 闹钟模式（待实现）
+
+### 软件架构
+<details>
+<summary>点击展开架构的ASCII树形图</summary>
+
+```
 clock_mode.v  ← 顶层模块，整个项目的入口
 │
 │  ── 时钟与复位 ──
@@ -84,3 +106,17 @@ clock_mode.v  ← 顶层模块，整个项目的入口
     │   load_num里：hor_pulse/min_pulse/sec_pulse直接作为时钟（按键驱动模式）
     ├── seg_dynamic.v（置数模式专用，输入为load_num内部计数值）
     └── hc595_ctrl.v（置数模式专用）
+```
+</details> 
+
+## 按键映射
+| 按键 | 功能 | 引脚映射 |
+|------|------|------|
+| choose | 切换置数字段（时→分→秒）| M2 |
+| num_up | 当前字段数值+1 | E15 |
+| num_down | 当前字段数值-1 | M1 |
+| load   | 短按切换模式/确认置数，长按3秒确认置数 | E16 |
+| reset | 复位 | M15 |
+
+## 备注
+- 本仓库为私人备份，不公开。

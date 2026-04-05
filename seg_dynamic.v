@@ -45,7 +45,7 @@ reg     seg_clk = 1'b1;
 
 //定义中间变量——数码管数据显示
 reg     [2:0]   cnt_sel = 3'b0;         //位选信号计数器
-reg     [4:0]   data_disp = 5'b0;       //为了避免case语句嵌套，增强可读性，定义此变量位段选信号生成的中间变量，此变量不包含小数点
+reg     [3:0]   data_disp = 4'b0;       //为了避免case语句嵌套，增强可读性，定义此变量位段选信号生成的中间变量，此变量不包含小数点
 reg     point_en   = 1'b1;              //为了实现小数点以1s为周期闪烁而定义数码管使能信号
 reg     point_disp = 1'b0;              //当前数码管显示的小数点
 //定义锁存器——存储sec_clk在seg_clk的上一周期的值
@@ -86,7 +86,7 @@ always@(posedge seg_clk)
 begin
 //    if(!reset)
     if(reset==1'b0)
-        begin data_disp <= 4'd17; sel <= 6'b11_1111; end    //复位：全显示
+        begin data_disp <= 4'd15; sel <= 6'b11_1111; end    //复位：全显示
     else
         begin
         case(cnt_sel)
@@ -153,32 +153,36 @@ begin
     else
         begin
         case(data_disp)
-        5'd0 :  seg =   {point_disp,7'b100_0000};   //显示数字0，字母O
-        5'd1 :  seg =   {point_disp,7'b111_1001};   //显示数字1
-        5'd2 :  seg =   {point_disp,7'b010_0100};   //显示数字2
-        5'd3 :  seg =   {point_disp,7'b011_0000};   //显示数字3
-        5'd4 :  seg =   {point_disp,7'b001_1001};   //显示数字4
-        5'd5 :  seg =   {point_disp,7'b001_0010};   //显示数字5
-        5'd6 :  seg =   {point_disp,7'b000_0010};   //显示数字6
-        5'd7 :  seg =   {point_disp,7'b111_1000};   //显示数字7
-        5'd8 :  seg =   {point_disp,7'b000_0000};   //显示数字8
-        5'd9 :  seg =   {point_disp,7'b001_0000};   //显示数字9
-        5'd10:  seg =   {point_disp,7'b000_1000};   //显示数字A
-        5'd11:  seg =   {point_disp,7'b000_0011};   //显示数字B       
-        5'd12:  seg =   {point_disp,7'b100_0110};   //显示数字C
-        5'd13:  seg =   {point_disp,7'b010_0001};   //显示数字d
-        5'd14:  seg =   {point_disp,7'b000_0110};   //显示数字E
-        5'd15:  seg =   {point_disp,7'b000_1110};   //显示数字F
+        4'd0 :  seg =   {point_disp,7'b100_0000};   //显示数字0，字母O
+        4'd1 :  seg =   {point_disp,7'b111_1001};   //显示数字1
+        4'd2 :  seg =   {point_disp,7'b010_0100};   //显示数字2
+        4'd3 :  seg =   {point_disp,7'b011_0000};   //显示数字3
+        4'd4 :  seg =   {point_disp,7'b001_1001};   //显示数字4
+        4'd5 :  seg =   {point_disp,7'b001_0010};   //显示数字5
+        4'd6 :  seg =   {point_disp,7'b000_0010};   //显示数字6
+        4'd7 :  seg =   {point_disp,7'b111_1000};   //显示数字7
+        4'd8 :  seg =   {point_disp,7'b000_0000};   //显示数字8
+        4'd9 :  seg =   {point_disp,7'b001_0000};   //显示数字9
+        4'd10:  seg =   {point_disp,7'b100_0111};   //显示数字L
+        4'd11:  seg =   {point_disp,7'b000_1000};   //显示数字A
+        4'd12:  seg =   {point_disp,7'b010_0001};   //显示数字d
+        4'd13:  seg =   {point_disp,7'b100_0110};   //显示数字C
+        4'd14:  seg =   {point_disp,7'b111_1111};   //全灭
+        4'd15:  seg =   8'b0;                       //全显示
+        
+        // 请看上方对data_disp复制的case语句，这种逻辑下，disp无法被赋予15以上的值！！
+        // 所以只能根据现有的需求，将需要的编码，不需要的只能舍弃
+        // data_disp也没必要定义成5位宽的了
+        // 5'd11:  seg =   {point_disp,7'b000_0011};   //显示数字B       
+        // 5'd14:  seg =   {point_disp,7'b000_0110};   //显示数字E
+        // 5'd15:  seg =   {point_disp,7'b000_1110};   //显示数字F
                                                     //数字G无法显示  
-        5'd16:  seg =   {point_disp,7'b000_1001};   //显示数字H
+        // 5'd16:  seg =   {point_disp,7'b000_1001};   //显示数字H
                                                     //数字I无法显示
                                                     //数字J无法显示
                                                     //数字K无法显示
-        5'd17:  seg =   {point_disp,7'b100_0111};   //显示数字L  
-        5'd31:  seg =   {point_disp,7'b111_1111};   //全灭
-
 //        5'd16:  seg =   8'b1011_1111;               //显示负号
-//        5'd17:  seg =   8'b0;                       //全显示
+
         default:seg =   8'b1;                       //异常：全不显示
         endcase
         end

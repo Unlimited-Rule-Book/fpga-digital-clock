@@ -95,11 +95,11 @@ reg [1:0]   current_load = LOAD_IDLE;
 reg set_en = 1'b0;
 
 //定义SHOW状态数码管显示的字符，这些在末尾实例化seg_dymanic时才会用到
-localparam  SHOW_EMPTY = 5'd31;  //全空，与seg_dynamic中的设定有关
-localparam  SHOW_L     = 5'd17;  //L，与seg_dynamic中的设定有关
-localparam  SHOW_O     = 5'd0 ;  //O，与seg_dynamic中的设定有关
-localparam  SHOW_A     = 5'd10;  //A，与seg_dynamic中的设定有关
-localparam  SHOW_d     = 5'd13;  //d，与seg_dynamic中的设定有关
+localparam  SHOW_EMPTY = 4'd14;  //全空，与seg_dynamic中的设定有关
+localparam  SHOW_L     = 4'd10;  //L，与seg_dynamic中的设定有关
+localparam  SHOW_O     = 4'd0 ;  //O，与seg_dynamic中的设定有关
+localparam  SHOW_A     = 4'd11;  //A，与seg_dynamic中的设定有关
+localparam  SHOW_d     = 4'd12;  //d，与seg_dynamic中的设定有关
 //记录sec_clk在上一系统时钟周期的只，用于判断sec_clk的跳沿
 reg sec_clk_prev = 1'b1;
 always@(posedge sys_clk)
@@ -174,8 +174,11 @@ begin
 end
 
 
-
-
+// 控制置数时的数字显示，状态机在实例化counter的下面
+reg [1:0]   twinkle = 2'b0;
+localparam  TWINKLE_HOUR = 2'b00;
+localparam  TWINKLE_MINUTE = 2'b01;
+localparam  TWINKLE_SECOND = 2'b10;
 
 //将choose、num_up、num_down转化成脉宽等于系统时钟的脉冲
 reg choose_pulse = 1'b1;
@@ -257,6 +260,7 @@ reg num_down_prev = 1'b1;//默认按键未按下
 reg load_before_cnt = 1'b0; //load_before只能按一次
 reg load_before = 1'b1;
 
+
 //状态机、时分秒计数脉冲产生
 always@(posedge sys_clk or negedge reset_n)
 begin
@@ -288,14 +292,23 @@ begin
             num_down_prev <= num_down;
             sec_pulse <= 1'b0;
             min_pulse <= 1'b0;
-        
-            if((num_up_prev==1'b1&&num_up==1'b0) || (num_down_prev==1'b1&&num_down==1'b0))
+            twinkle <= TWINKLE_HOUR;    // 用于控制该数位闪烁
+
+            // if((num_up_prev==1'b1&&num_up==1'b0) || (num_down_prev==1'b1&&num_down==1'b0))
+                // hor_pulse <= 1'b1;
+            // else if(((num_up_prev==1'b0&&num_up==1'b1) || (num_down_prev==1'b0&&num_down==1'b1)))
+                // hor_pulse <= 1'b0;
+            // else
+                // hor_pulse <= hor_pulse;
+            if((~num_up_pulse) || (~num_down_pulse))begin
                 hor_pulse <= 1'b1;
-            else if(((num_up_prev==1'b0&&num_up==1'b1) || (num_down_prev==1'b0&&num_down==1'b1)))
+            end
+            else if((num_up_pulse) || (num_down_pulse))
                 hor_pulse <= 1'b0;
             else
-                hor_pulse <= hor_pulse;
-            if(!choose_pulse) current_set <= SET_MINUTE;    // choose低有效
+                hor_pulse <= hor_pulse; // 只修改了这一处，分、秒的都没改。主要是考虑到num_updown已经是脉冲了，hour_pulse是不是不需要边沿检测了
+                
+            if(~choose_pulse) current_set <= SET_MINUTE;    // choose低有效
         end
         SET_MINUTE:
         begin
@@ -303,14 +316,15 @@ begin
             num_down_prev <= num_down;
             sec_pulse <= 1'b0;
             hor_pulse <= 1'b0;
-        
+            twinkle <= TWINKLE_MINUTE;    // 用于控制该数位闪烁
+
             if((num_up_prev==1'b1&&num_up==1'b0) || (num_down_prev==1'b1&&num_down==1'b0))
                 min_pulse <= 1'b1;
             else if(((num_up_prev==1'b0&&num_up==1'b1) || (num_down_prev==1'b0&&num_down==1'b1)))
                 min_pulse <= 1'b0;
             else
                 min_pulse <= min_pulse;
-            if(!choose_pulse) current_set <= SET_SECOND;    // choose低有效
+            if(~choose_pulse) current_set <= SET_SECOND;    // choose低有效
         end        
         SET_SECOND:
         begin
@@ -318,6 +332,7 @@ begin
             num_down_prev <= num_down;
             min_pulse <= 1'b0;
             hor_pulse <= 1'b0;
+            twinkle <= TWINKLE_SECOND;    // 用于控制该数位闪烁
         
             if((num_up_prev==1'b1&&num_up==1'b0) || (num_down_prev==1'b1&&num_down==1'b0))
                 sec_pulse <= 1'b1;
@@ -325,7 +340,7 @@ begin
                 sec_pulse <= 1'b0;
             else
                 sec_pulse <= sec_pulse;
-            if(!choose_pulse) current_set <= SET_HOUR;//    choose低有效
+            if(~choose_pulse) current_set <= SET_HOUR;//    choose低有效
         end        
         default: //----------------------后期应当修改------------------------------
         begin
@@ -346,6 +361,7 @@ begin
     end // 这是使能信号 if(mode_en) begin 的结束，就不按Tab缩进了
     end
 end
+
 
 //定义进位信号中间值
 wire    [5:0]   RCO_zhong;
@@ -382,13 +398,32 @@ counter sec0(sys_clk,sec_pulse,reset_n,load_before,before_second[3:0],4'b1001,  
         hor0(sys_clk,hor_pulse,reset_n,load_before,before_hour[3:0],  hour_radix,1'b1        ,1'b1,mode_updown,load_hour[3:0],  RCO_zhong[4]),
         hor1(sys_clk,hor_pulse,reset_n,load_before,before_hour[7:4],  4'b0010,   RCO_zhong[4],1'b0,mode_updown,load_hour[7:4],  RCO_zhong[5]);
 
-always@(*)
+// 控制置数时的数字显示，
+always@(posedge sys_clk or negedge reset_n)         // 状态机牛逼！！！
 begin
-    ready_hour   = load_hour;
-    ready_minute = load_minute;
-    ready_second = load_second;
+    case(twinkle)
+        TWINKLE_HOUR:
+        begin
+            ready_minute <= load_minute; ready_second <= load_second;
+            if(sec_clk)         ready_hour <= 4'd14;
+            else if(~sec_clk)   ready_hour <= load_hour; // sec_clk高电平时输出正常数字，低电平时传入31，即全灭
+        end
+        TWINKLE_MINUTE:
+        begin
+            ready_hour <= load_hour; ready_second <= load_second;
+            if(sec_clk)         ready_minute <= 4'd14;
+            else if(~sec_clk)   ready_minute <= load_minute; // sec_clk高电平时输出正常数字，低电平时传入31，即全灭
+        end
+        TWINKLE_SECOND:
+        begin
+            ready_hour <= load_hour; ready_minute <= load_minute;
+            if(sec_clk)         ready_second <= 4'd14;
+            else if(~sec_clk)   ready_second <= load_second; // sec_clk高电平时输出正常数字，低电平时传入31，即全灭    
+        end
+    endcase
 end
 
+// 进行置数
 always@(negedge load_confirm or negedge reset_n)
 begin
     if(!reset_n)
@@ -439,6 +474,7 @@ end
 //子模块连线声明
 wire    [5:0]   sel;
 wire    [7:0]   seg;
+// 数显控制，模式为LOAD_SHOW时，显示LOAd
 wire    [7:0]   disp_hour   = (current_load==LOAD_SHOW) ? {SHOW_EMPTY, SHOW_L} : ready_hour;
 wire    [7:0]   disp_minute = (current_load==LOAD_SHOW) ? {SHOW_O, SHOW_A}     : ready_minute;
 wire    [7:0]   disp_second = (current_load==LOAD_SHOW) ? {SHOW_d, SHOW_EMPTY} : ready_second;
@@ -449,9 +485,9 @@ seg_dynamic     load_num_seg_dynamic
     .sys_clk            (sys_clk   ),
     .sec_clk            (sec_clk   ),                
     .reset              (reset     ),
-    .out_second         (ready_second),
-    .out_minute         (ready_minute),
-    .out_hour           (ready_hour  ),
+    .out_second         (disp_second),
+    .out_minute         (disp_minute),
+    .out_hour           (disp_hour  ),
     .point_out          (point_out  ),
 
     .sel                (sel       ),  

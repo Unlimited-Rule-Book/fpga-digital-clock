@@ -32,6 +32,8 @@ input   wire   pulse_1ms,   // 1ms脉冲，使能信号
 input   wire   reset,       // 异步低电平复位
 input   wire   button_in,   // 按键输入（低电平按下）
                
+output  reg    [31:0] press_counter,//用于测试==========================================
+
 output  reg    short_press, // 短按触发信号，低电平有效
 output  reg    long_press   // 长按触发信号，低电平有效
 );
@@ -52,7 +54,7 @@ localparam LONG_PRESS_CNT_MAX = LONG_PRESS_MS - 1; // 3秒计数值
 reg button_sync;        // 同步后的按键信号
 reg button_debounced;   // 消抖后的按键状态
 reg [$clog2(DEBOUNCE_MS)-1:0] debounce_counter;  // 消抖计数器
-reg [$clog2(LONG_PRESS_MS)-1:0] press_counter;   // 短按长按计时计数器
+// reg [$clog2(LONG_PRESS_MS)-1:0] press_counter;   // 短按长按计时计数器=========================注释掉用于测试
 
 // 同步按键输入（避免亚稳态）
 always @(posedge sys_clk or negedge reset) begin
@@ -90,52 +92,42 @@ end
 reg [$clog2(DEBOUNCE_MS)-1:0] short_counter;    // 用于拉高短按信号
 
 always @(posedge sys_clk or negedge reset) begin
-    if (!reset) 
-    begin
+    if (!reset) begin
         press_counter <= 0;
         short_counter <= 0;
         short_press <= 1'b1;
         long_press <= 1'b1;
     end
-    else 
-    begin
-        if (button_debounced==1'b0)  // 按键按下（低电平）
-        begin
+    else begin
+        if (button_debounced==1'b0)begin    // 按键按下（低电平）
             short_counter <= 5'd0;   // 新增：每次按下时清零short_counter，防止上次残留值影响本次短按脉冲宽度
-            if (press_counter > 4 && press_counter < SHORT_END_CNT_MAX) //press_counter > 2'b11是为了滤除button_debounced产生的毛刺
-            begin
+            if (press_counter > 4 && press_counter < SHORT_END_CNT_MAX)begin //press_counter > 2'b11是为了滤除button_debounced产生的毛刺
                 if (pulse_1ms) press_counter <= press_counter + 1;
                 short_press <= 1'b1;     // 未达到0.5秒，且按键未抬起，不触发短按长按
             end
-            else if(press_counter >= SHORT_END_CNT_MAX && press_counter < LONG_PRESS_CNT_MAX)
-            begin
+            else if(press_counter >= SHORT_END_CNT_MAX && press_counter < LONG_PRESS_CNT_MAX)begin
                 if (pulse_1ms) press_counter <= press_counter + 1;
                 short_press <= 1'b1;      // 达到0.5秒，不是短按信号,可能为长按信号，继续计时
             end
-            else if(press_counter >= LONG_PRESS_CNT_MAX)
-            begin
+            else if(press_counter >= LONG_PRESS_CNT_MAX)begin
                 press_counter <= 0;
                 long_press <= 1'b0;       // 达到3秒，是长按信号，无论此后按键是否抬起，都立即生效
                 short_press <= 1'b1;
             end
-            else
-            begin
+            else begin
                 if (pulse_1ms) press_counter <= press_counter + 1;
                 short_press <= 1'b1;
                 long_press <= 1'b1;    
             end
         end
-        else                    // 按键抬起
-        begin  
-            if(press_counter > 4 && press_counter < SHORT_END_CNT_MAX)  //滤除毛刺；按键抬起且小于0.5秒，判定为短按
-            begin
+        else begin              // 按键抬起 
+            if(press_counter > 4 && press_counter < SHORT_END_CNT_MAX)begin //滤除毛刺；按键抬起且小于0.5秒，判定为短按
                 press_counter <= press_counter;
                 short_press <= 1'b0;
                 //为避免按键抬起后，短按信号维持低电平，20ms后将其强制拉高；同时为了持续计数，先使press_counter维持原态
                 if(short_counter < DEBOUNCE_CNT_MAX)
                     if (pulse_1ms) short_counter <= short_counter + 1'b1;
-                else
-                begin
+                else begin
                     press_counter <= 0; //此操作会使按键一直未按下时，不会重复触发短按信号
                                         //（即press_counter小于0，if条件判断为逻辑零，不进入此分支）
                     short_press <= 1'b1;
@@ -143,14 +135,12 @@ always @(posedge sys_clk or negedge reset) begin
                     short_counter <= 0;
                 end                
             end
-            else if(press_counter >= SHORT_END_CNT_MAX && press_counter < LONG_PRESS_CNT_MAX)
-            begin
+            else if(press_counter >= SHORT_END_CNT_MAX && press_counter < LONG_PRESS_CNT_MAX)begin
                 press_counter <= 0;          
                 short_press <= 1'b1;
                 long_press <= 1'b1;                     //按键抬起且大于0.5秒，小于3秒，判定为无效
             end
-            else
-            begin
+            else begin
                 press_counter <= 0;
                 short_press <= 1'b1;
                 long_press <= 1'b1;      //长按3秒后抬起，或处于press_counter未开始计数的状态

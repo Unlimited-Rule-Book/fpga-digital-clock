@@ -91,21 +91,19 @@ wire    choose_bs;
 wire    num_up_bs;
 wire    num_down_bs; 
 // 按键消抖模块接口已改为pulse_1ms计数，参数单位为ms
-// // // button_stabilization #(.DEBOUNCE_MS(20))
-                        // // // //load_b_s     (sys_clk, reset, load, load_bs),
-                        // // // choose_b_s   (sys_clk, pulse_1ms, reset, choose, choose_bs),
-                        // // // num_up_b_s   (sys_clk, pulse_1ms, reset, num_up, num_up_bs),
-                        // // // num_down_b_s (sys_clk, pulse_1ms, reset, num_down, num_down_bs);
+button_stabilization #(.DEBOUNCE_MS(1))        // 为了test bench从20ms改成1ms======================================================
+                        //load_b_s     (sys_clk, reset, load, load_bs),
+                        choose_b_s   (sys_clk, pulse_1ms, reset, choose, choose_bs),
+                        num_up_b_s   (sys_clk, pulse_1ms, reset, num_up, num_up_bs),
+                        num_down_b_s (sys_clk, pulse_1ms, reset, num_down, num_down_bs);
 //按键消抖+短按检测（大于20ms小于500ms）+长按3秒检测  
 // 注意！！改变消抖时间和长短按时长，修改实例化时的参数即可，无需关心内部计数          
 wire    load_bs_s;
 wire    load_bs_l;
 // 按键消抖+长短按模块接口已改为pulse_1ms计数，LONG_PRESS_MS单位为ms
-// // // button_stabilization_long_short #(.DEBOUNCE_MS(20), .SHORT_END_MS(500), .LONG_PRESS_MS(3_000)) 
-                                // // // load_b_s_l_s    (sys_clk, pulse_1ms, reset, load, load_bs_s, load_bs_l);
+button_stabilization_long_short #(.DEBOUNCE_MS(1), .SHORT_END_MS(500), .LONG_PRESS_MS(3_000)) // 为了test bench短按从20ms改成1ms======================================================
+                                load_b_s_l_s    (sys_clk, pulse_1ms, reset, load, load_bs_s, load_bs_l);
                                 
-// 为了test bench，取消按键消抖
-assign choose_bs = choose;assign num_up_bs = num_up;assign num_down_bs = num_down;assign load_bs_s = load;assign load_bs_l = 1;
 
 
 

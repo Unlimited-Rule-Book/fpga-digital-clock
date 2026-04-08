@@ -33,15 +33,20 @@ input   wire    [7:0]   out_minute,
 input   wire    [7:0]   out_hour,
 input   wire    [5:0]   point_out,
 
+output  reg     seg_flag,//==========用于测试============
+output  reg     seg_toggle,//==========用于测试============
+
 output  reg     [5:0]   sel = 6'b11_1111,  //数码管位选信号，初值为选中所有数码管
 output  reg     [7:0]   seg = 8'b0          //数码管段选信号，初值为点亮数码管的所有段
 );
 //定义常量
-parameter   CNT_MAX = 9'd500;            //数码管以1ms为周期进行扫描，待分频时钟1mhz计500个数后反转，刷新数码管的时钟的电平
+parameter   CNT_MAX = 10'd1000;            //数码管以1ms为周期进行扫描，待分频时钟1mhz计500个数后反转，刷新数码管的时钟的电平
 
 //定义中间变量——数码管刷新时钟
 reg     [$clog2(CNT_MAX)-1:0]  cnt_1ms = 9'b0;         //1ms计数器，每1ms刷新一次数码管，24_999需要定义15位十进制数
-reg     seg_clk = 1'b1;
+// reg     seg_flag = 1'b0; //======用于测试===================
+// reg     seg_toggle = 1'b0;   //======用于测试===================
+reg     seg_toggle_s1,  seg_toggle_s2,  seg_toggle_s3;
 
 //定义中间变量——数码管数据显示
 reg     [2:0]   cnt_sel = 3'b0;         //位选信号计数器
@@ -54,41 +59,60 @@ reg     sec_clk_prev = 1'b1;
 
 //  --------------------  主程序  --------------------
 
-//seg_clk:数码管刷新时钟
+//flag_1ms:数码管刷新时钟使能信号
 //  ----------------------------如需添加复位信号，则可将divider中的脉冲pulse引出，作为刷新时钟的复位信号--------------------------
-always@(posedge pre_clk)
+always@(posedge pre_clk or negedge reset)
 begin
-    if(cnt_1ms==CNT_MAX)
-        begin
-        seg_clk <= ~seg_clk;
+    if(!reset)begin
+        cnt_1ms <= 0;
+        seg_toggle <= 1'b0;
+    end
+    else if(cnt_1ms==CNT_MAX) begin
         cnt_1ms <= 9'd0;        //如果pre_clk改了，这里0的大小也得从3改成其它数
-        end
+        seg_toggle <= ~seg_toggle;
+    end
     else
         cnt_1ms <= cnt_1ms + 1'b1;
 end
 
+always@(posedge sys_clk or negedge reset)
+begin
+    if(!reset)begin
+        seg_toggle_s1 <= 1'b0;
+        seg_toggle_s2 <= 1'b0;
+        seg_toggle_s3 <= 1'b0;
+        seg_flag      <= 1'b0;
+    end
+    else begin
+        seg_toggle_s1 <= seg_toggle;
+        seg_toggle_s2 <= seg_toggle_s1;
+        seg_toggle_s3 <= seg_toggle_s2;
+     
+        seg_flag = seg_toggle_s2 ^ seg_toggle_s3;
+    end
+end
+
 //cnt_sel:位选信号计数器
 //always@(posedge seg_clk or negedge reset)
-always@(posedge seg_clk)
+always@(posedge sys_clk)
 begin
 //    if(!reset)
     if(reset==1'b0)
         cnt_sel <= 3'b0;
-    else if(cnt_sel==3'd5)
+    else if(cnt_sel==3'd5 && seg_flag)
         cnt_sel <= 3'b0;
-    else
+    else if (seg_flag)
         cnt_sel <= cnt_sel + 1'b1;
 end
 
 //data_disp,sel:位选信号生成与控制六个数码管位选信号，使数码管轮流显示
 //always@(posedge seg_clk or negedge reset)
-always@(posedge seg_clk)
+always@(posedge sys_clk)
 begin
 //    if(!reset)
-    if(reset==1'b0)
-        begin data_disp <= 4'd15; sel <= 6'b11_1111; end    //复位：全显示
-    else
-        begin
+    if(reset==1'b0)begin 
+        data_disp <= 4'd15; sel <= 6'b11_1111; end    //复位：全显示
+    else if(seg_flag)begin
         case(cnt_sel)
         3'd0:   begin data_disp   <=  out_second[3:0];  sel <=  6'b00_0001; end
         3'd1:   begin data_disp   <=  out_second[7:4];  sel <=  6'b00_0010; end
@@ -98,7 +122,7 @@ begin
         3'd5:   begin data_disp   <=  out_hour[7:4];    sel <=  6'b10_0000; end
         default:begin data_disp   <=  4'dx;             sel <=  6'b00_0000; end //异常：全不显示，data_disp也没有4'dx这个取值
         endcase
-        end
+    end
 end
 
 //数码管数据显示，小数点以1s为周期闪烁
@@ -128,16 +152,16 @@ end
 
 //point_disp:为了增强可读性，也为了使对小数点的操作更加灵活，设置小数点寄存器，低电平点亮，所以需要对输入信号取反
 //always@(posedge seg_clk or negedge reset)
-always@(posedge seg_clk)
+always@(posedge sys_clk)
 begin
 //    if(!reset)
     if(reset==1'b0)
         point_disp <= 1'b0;
-    else if(point_en==1'b1)
+    else if(point_en==1'b1 && seg_flag)
         point_disp <= ~point_out[cnt_sel];
-    else if(point_en==1'b0)
+    else if(point_en==1'b0 && seg_flag)
         point_disp <= 1'b1;
-    else
+    else if(seg_flag)
         point_disp <= point_disp;
 end
 

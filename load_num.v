@@ -28,6 +28,7 @@ module load_num
 (
 input   wire    mode_en,
 input   wire    sys_clk,
+input   wire    pre_clk,
 input   wire    sec_clk,
 input   wire    reset,
 input   wire    load,
@@ -164,7 +165,7 @@ begin
         end        
         default: //----------------------后期可能修改------------------------------
         begin
-            current_load <= LOAD_EDIT;
+            current_load <= LOAD_IDLE;
             set_en <= 1'b0;
             
         end
@@ -483,6 +484,7 @@ wire    [7:0]   disp_second = (current_load==LOAD_SHOW) ? {SHOW_d, SHOW_EMPTY} :
 seg_dynamic     load_num_seg_dynamic
 (
     .sys_clk            (sys_clk   ),
+    .pre_clk            (pre_clk    ),
     .sec_clk            (sec_clk   ),                
     .reset              (reset     ),
     .out_second         (disp_second),

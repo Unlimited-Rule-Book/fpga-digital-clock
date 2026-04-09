@@ -60,10 +60,12 @@ output  wire    ds,
 output  wire    oe   
 );
 
+wire sys_clk_1mhz;
 //系统时钟PLL输出1MHz
 my_pll_divider	my_pll_divider_inst (
 	.areset ( ~reset_input ),      // 我的系统复位低有效，而PLL复位高有效，所以这里这么写？
 	.inclk0 ( sys_clk ),
+    
 	.c0 ( sys_clk_1mhz ),
 	.locked ( locked_sig )  // 系统全局复位“使能”，当PLL锁定之前，系统一直处于复位状态
 	);
@@ -382,6 +384,7 @@ load_num    clock_mode_load_num
 (
     .mode_en         (mode_load_en),
     .sys_clk         (sys_clk   ),
+    .pre_clk         (sys_clk_1mhz),
     .sec_clk         (sec_clk   ),
     .reset           (reset     ),
     .load            (load_bs_s ),

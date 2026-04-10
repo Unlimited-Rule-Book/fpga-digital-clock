@@ -52,35 +52,37 @@ output  wire    oe
 );
 
 //load或load_confirm（确认置数）后，都进行一次复位
-reg reset_n = 1'b1;
-reg reset_n_count = 1'b0;
-always@(posedge sys_clk or negedge reset)
-begin
-    if(!reset) begin
-        reset_n <= reset;
-        reset_n_count <= 1'b0;
-    end
-    else begin
-        if(mode_en) begin               // 使能信号
-            if(load==1'b0) begin
-                if(reset_n_count==1'b0) begin
-                    reset_n <= 1'b0;
-                    reset_n_count <= 1'b1;
-                end
-                else if(reset_n_count==1'b1) begin
-                    reset_n <= 1'b1;
-                    reset_n_count <= 1'b1;
-                end
-            end  
-            else if(load==1'b1) begin
-                reset_n <= 1'b1;
-                reset_n_count <= 1'b0;
-            end
-        end
-//        else  // 非使能时就不写else了，一方面是不写的话，系统综合后就是“维持原值”，符合预期，
-                //另一方面是写的话要就得写两行，还得添加begin、end，麻烦！
-    end
-end
+// // // reg reset_n = 1'b1;
+// // // reg reset_n_count = 1'b0;
+// // // always@(posedge sys_clk or negedge reset)
+// // // begin
+    // // // if(!reset) begin
+        // // // reset_n <= reset;
+        // // // reset_n_count <= 1'b0;
+    // // // end
+    // // // else begin
+        // // // if(mode_en) begin               // 使能信号
+            // // // if(load==1'b0) begin
+                // // // if(reset_n_count==1'b0) begin
+                    // // // reset_n <= 1'b0;
+                    // // // reset_n_count <= 1'b1;
+                // // // end
+                // // // else if(reset_n_count==1'b1) begin
+                    // // // reset_n <= 1'b1;
+                    // // // reset_n_count <= 1'b1;
+                // // // end
+            // // // end  
+            // // // else if(load==1'b1) begin
+                // // // reset_n <= 1'b1;
+                // // // reset_n_count <= 1'b0;
+            // // // end
+        // // // end
+// // // //        else  // 非使能时就不写else了，一方面是不写的话，系统综合后就是“维持原值”，符合预期，
+                // // // //另一方面是写的话要就得写两行，还得添加begin、end，麻烦！
+    // // // end
+// // // end
+wire reset_n;
+assign reset_n = reset;
 
 
 
@@ -486,7 +488,7 @@ seg_dynamic     load_num_seg_dynamic
     .sys_clk            (sys_clk   ),
     .pre_clk            (pre_clk    ),
     .sec_clk            (sec_clk   ),                
-    .reset              (reset     ),
+    .reset              (reset_n   ),
     .out_second         (disp_second),
     .out_minute         (disp_minute),
     .out_hour           (disp_hour  ),
@@ -500,7 +502,7 @@ seg_dynamic     load_num_seg_dynamic
 hc595_ctrl      load_num_hc595_ctrl
 (
     .sys_clk            (sys_clk),
-    .reset              (reset  ),
+    .reset              (reset_n),
     .sel                (sel    ),
     .seg                (seg    ),
 

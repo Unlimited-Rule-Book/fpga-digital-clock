@@ -52,8 +52,6 @@ input   wire    choose,
 input   wire    num_up,
 input   wire    num_down,
 
-output  reg     mode_load_en,   //用于调试
-
 output  wire    stcp,
 output  wire    shcp,
 output  wire    ds,  
@@ -127,11 +125,10 @@ button_stabilization_long_short #(.DEBOUNCE_MS(1), .SHORT_END_MS(500), .LONG_PRE
 
 //时钟模式、置数模式、闹钟模式使能信号
 reg mode_clock_en = 1'b1;
-// reg mode_load_en = 1'b0;// 用于测试，注释掉了-------------------------------------------------------------------------------------------------
+reg mode_load_en = 1'b0;
 reg mode_alarm_en = 1'b0;
 //对不同模式的输入输出进行使能
 //置数、闹钟模式的输入需要控制，时钟的输入不可控制
-assign  clk_load_num  =   sys_clk &&mode_load_en ;//不能这么用门控时钟，已修改，应该已经没用了-------------------------------------------------------------------------------------------------
 assign  choose_load_num   = choose_bs   | (~mode_load_en); // 按键低有效
 assign  num_up_load_num   = num_up_bs   | (~mode_load_en);
 assign  num_down_load_num = num_down_bs | (~mode_load_en);

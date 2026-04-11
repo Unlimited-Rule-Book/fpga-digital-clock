@@ -52,13 +52,20 @@ input   wire    choose,
 input   wire    num_up,
 input   wire    num_down,
 
-output  wire    stcp,
-output  wire    shcp,
-output  wire    ds,  
-output  wire    oe   
+// // // output  wire    stcp,
+// // // output  wire    shcp,
+// // // output  wire    ds,  
+// // // output  wire    oe   
+// 将赋值加入状态机中，所以得改一下
+output  reg     stcp,
+output  reg     shcp,
+output  reg     ds,  
+output  reg     oe  
+
 );
 
 wire sys_clk_1mhz;
+wire locked_sig;
 //系统时钟PLL输出1MHz
 my_pll_divider	my_pll_divider_inst (
 	.areset ( ~reset_input ),      // 我的系统复位低有效，而PLL复位高有效，所以这里这么写？
@@ -129,13 +136,28 @@ reg mode_load_en = 1'b0;
 reg mode_alarm_en = 1'b0;
 //对不同模式的输入输出进行使能
 //置数、闹钟模式的输入需要控制，时钟的输入不可控制
-assign  choose_load_num   = choose_bs   | (~mode_load_en); // 按键低有效
-assign  num_up_load_num   = num_up_bs   | (~mode_load_en);
-assign  num_down_load_num = num_down_bs | (~mode_load_en);
-//闹钟模式 assign   sys_clk_alarm  =   sys_clk &&mode_alarm_en ;
-//闹钟模式 assign   choose_alarm   = ~(choose  &&mode_alarm_en);
-//闹钟模式 assign   num_up_alarm   = ~(num_up  &&mode_alarm_en);
-//闹钟模式 assign   num_down_alarm = ~(num_down&&mode_alarm_en);
+// 子模块连线----输入控制
+// 时钟模式不能限制输入！
+// 置数模式
+reg     choose_load_num  ;
+reg     num_up_load_num  ;
+reg     num_down_load_num;
+// 闹钟模式
+// reg     choose_alarm   ;
+// reg     num_up_alarm   ;
+// reg     num_down_alarm ;
+
+// 置数模式
+// // // assign  choose_load_num   = choose_bs   | (~mode_load_en); // 按键低有效
+// // // assign  num_up_load_num   = num_up_bs   | (~mode_load_en);
+// // // assign  num_down_load_num = num_down_bs | (~mode_load_en);
+//闹钟模式 
+// // // assign   sys_clk_alarm  =   sys_clk &&mode_alarm_en ;
+// // // assign   choose_alarm   = ~(choose  &&mode_alarm_en);
+// // // assign   num_up_alarm   = ~(num_up  &&mode_alarm_en);
+// // // assign   num_down_alarm = ~(num_down&&mode_alarm_en);
+// 输入赋值加入状态机
+
 
 //时钟、置数、闹钟模式的输出都需控制
 //子模块连线----输出控制
@@ -150,13 +172,19 @@ wire    shcp_load_num;
 wire    ds_load_num;  
 wire    oe_load_num;  
 //闹钟模式========================================================================
+// wire    stcp_alarm;
+// wire    shcp_alarm;
+// wire    ds_alarm;  
+// wire    oe_alarm;  
 
 
-// 输出控制
-assign  stcp = (stcp_clock&&mode_clock_en) || (stcp_load_num&&mode_load_en); //闹钟模式 || (stcp_alarm&&mode_alarm_en);
-assign  shcp = (shcp_clock&&mode_clock_en) || (shcp_load_num&&mode_load_en); //闹钟模式 || (stcp_alarm&&mode_alarm_en);
-assign  ds   = (ds_clock&&mode_clock_en)   || (ds_load_num&&mode_load_en); //闹钟模式   || (stcp_alarm&&mode_alarm_en);
-assign  oe   = (oe_clock&&mode_clock_en)   || (oe_load_num&&mode_load_en); //闹钟模式   || (stcp_alarm&&mode_alarm_en);
+
+// // // // 输出控制
+// // // assign  stcp = (stcp_clock&&mode_clock_en) || (stcp_load_num&&mode_load_en); //闹钟模式 || (stcp_alarm&&mode_alarm_en);
+// // // assign  shcp = (shcp_clock&&mode_clock_en) || (shcp_load_num&&mode_load_en); //闹钟模式 || (stcp_alarm&&mode_alarm_en);
+// // // assign  ds   = (ds_clock&&mode_clock_en)   || (ds_load_num&&mode_load_en); //闹钟模式   || (stcp_alarm&&mode_alarm_en);
+// // // assign  oe   = (oe_clock&&mode_clock_en)   || (oe_load_num&&mode_load_en); //闹钟模式   || (stcp_alarm&&mode_alarm_en);
+// 输出赋值加入状态机
 
 //模式选择模块
 //定义状态机状态
@@ -195,10 +223,15 @@ begin
             mode_clock_en <= 1'b1;
             mode_load_en <= 1'b0;
             mode_alarm_en <= 1'b0;
-//            stcp    <=  stcp_clock;
-//            shcp    <=  shcp_clock;
-//            ds      <=  ds_clock;  
-//            oe      <=  oe_clock;
+            // 输入控制
+            choose_load_num  <= 1'bz;
+            num_up_load_num  <= 1'bz;
+            num_down_load_num<= 1'bz;
+            // 输出控制
+            stcp    <=  stcp_clock;
+            shcp    <=  shcp_clock;
+            ds      <=  ds_clock;  
+            oe      <=  oe_clock;
             if(~load_bs_s)begin
                 MODE <= MODE_LOAD;
             end
@@ -212,16 +245,15 @@ begin
             mode_clock_en <= 1'b0;
             mode_load_en <= 1'b1;
             mode_alarm_en <= 1'b0;
-            
-//            sys_clk_load_num <= sys_clk;
-//            choose_load_num  <= choose_bs;
-//            num_up_load_num  <= num_up_bs;
-//            num_down_load_num<= num_down_bs;
-            
-//            stcp    <=  stcp_load_num;
-//            shcp    <=  shcp_load_num;
-//            ds      <=  ds_load_num;  
-//            oe      <=  oe_load_num;  
+            // 输入控制
+            choose_load_num  <= choose_bs;
+            num_up_load_num  <= num_up_bs;
+            num_down_load_num<= num_down_bs;
+            //输出控制
+            stcp    <=  stcp_load_num;
+            shcp    <=  shcp_load_num;
+            ds      <=  ds_load_num;  
+            oe      <=  oe_load_num;  
         
             prev <= {choose_bs,num_up_bs,num_down_bs};
             if(load_bs_s==1'b0&&load_bs_l==1'b1)begin
@@ -230,7 +262,9 @@ begin
                 else begin
                     counter_load_wait <= 2'b0;
                     counter_16s <= 0;
-                    MODE <= MODE_ALARM;
+                    // 测试load_num阶段，禁用alarm
+                    // // // MODE <= MODE_ALARM;
+                    MODE <= MODE_CLOCK;
                 end
             end
             
@@ -258,44 +292,53 @@ begin
             end
         end
     
-        MODE_ALARM:
-        begin
+    
+    // 测试load_num阶段，禁用alarm
+        // // // MODE_ALARM:
+        // // // begin
         
-            //同上，输入输出控制
+            // // // //同上，输入输出控制
         
-            prev <= {choose_bs,num_up_bs,num_down_bs};
-            if(load_bs_s==1'b0||load_bs_l==1'b0)begin
-                if(counter_load_wait < 2'b11) //load短按或长按，等待2个时钟周期后，切换回时钟模式
-                    counter_load_wait <= counter_load_wait + 1'b1;
-                else begin
-                    counter_load_wait <= 2'b0;
-                    counter_16s <= 0;
-                    MODE <= MODE_CLOCK;     // 修改前是MODE <= MODE_ALARM;
-                end
-            end
-            else if(now != prev)       
-                 counter_16s <= 0;           
-            else if(now == prev && counter_16s < COUNTER_16S_COUNT)
-                if (pulse_1ms) counter_16s <= counter_16s + 1'b1;
-            else if(now == prev && counter_16s >= COUNTER_16S_COUNT)begin
-                counter_16s <= 0;
-                MODE <= MODE_CLOCK;
-            end
-            else begin
-                counter_16s <= counter_16s;
-                MODE <= MODE;
-            end
-        end
+            // // // prev <= {choose_bs,num_up_bs,num_down_bs};
+            // // // if(load_bs_s==1'b0||load_bs_l==1'b0)begin
+                // // // if(counter_load_wait < 2'b11) //load短按或长按，等待2个时钟周期后，切换回时钟模式
+                    // // // counter_load_wait <= counter_load_wait + 1'b1;
+                // // // else begin
+                    // // // counter_load_wait <= 2'b0;
+                    // // // counter_16s <= 0;
+                    // // // MODE <= MODE_CLOCK;     // 修改前是MODE <= MODE_ALARM;
+                // // // end
+            // // // end
+            // // // else if(now != prev)       
+                 // // // counter_16s <= 0;           
+            // // // else if(now == prev && counter_16s < COUNTER_16S_COUNT)
+                // // // if (pulse_1ms) counter_16s <= counter_16s + 1'b1;
+            // // // else if(now == prev && counter_16s >= COUNTER_16S_COUNT)begin
+                // // // counter_16s <= 0;
+                // // // MODE <= MODE_CLOCK;
+            // // // end
+            // // // else begin
+                // // // counter_16s <= counter_16s;
+                // // // MODE <= MODE;
+            // // // end
+        // // // end
+        
+        
         
         default:    //default：时钟模式
         begin
             mode_clock_en <= 1'b1;
             mode_load_en <= 1'b0;
             mode_alarm_en <= 1'b0;
-//            stcp    <=  stcp_clock;
-//            shcp    <=  shcp_clock;
-//            ds      <=  ds_clock;  
-//            oe      <=  oe_clock;
+            // 输入控制
+            choose_load_num  <= 1'bz;
+            num_up_load_num  <= 1'bz;
+            num_down_load_num<= 1'bz;
+            // 输出控制
+            stcp    <=  stcp_clock;
+            shcp    <=  shcp_clock;
+            ds      <=  ds_clock;  
+            oe      <=  oe_clock;
             if(~load_bs_s)begin
                 MODE <= MODE_LOAD;
             end
@@ -315,18 +358,7 @@ end
 
 
 
-//子模块连线----输入控制
-//时钟模式不能限制输入！
-//置数模式
-// wire    sys_clk_load_num ;
-// wire    choose_load_num  ;
-// wire    num_up_load_num  ;
-// wire    num_down_load_num;
-//闹钟模式
-//wire    sys_clk_alarm  ;  // 不能这么用门控时钟
-//wire    choose_alarm   ;
-//wire    num_up_alarm   ;
-//wire    num_down_alarm ;
+
 
 
 

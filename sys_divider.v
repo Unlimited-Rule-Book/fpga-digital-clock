@@ -46,7 +46,7 @@ module sys_divider #(
     reg ms_flag;        // 每毫秒 翻转 一次，用于跨时钟域传递
     reg sec_flag;       // 每秒 toggle 一次，用于跨时钟域传递
     
-    always @(posedge pre_clk or negedge reset) begin
+    always @(posedge pre_clk) begin
         if (!reset) begin
             sec_cnt  <= 0;
             ms_cnt   <= 0;
@@ -81,7 +81,7 @@ module sys_divider #(
     reg sec_flag_s1, sec_flag_s2, sec_flag_s3;
     reg ms_flag_s1,  ms_flag_s2,  ms_flag_s3;
     
-    always @(posedge sys_clk or negedge reset) begin
+    always @(posedge sys_clk) begin
         if (!reset) begin
             ms_flag_s1  <= 1'b0;
             ms_flag_s2  <= 1'b0;

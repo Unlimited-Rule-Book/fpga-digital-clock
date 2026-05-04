@@ -39,7 +39,7 @@ wire    RCO_add;        //定义进位信号中间变量，可增强可读性，
 wire    RCO_subtract;   //定义借位信号中间变量，可增强可读性，若为提高执行效率，则可去掉
 
 
-always@(posedge sys_clk or negedge reset)begin
+always@(posedge sys_clk)begin
     if(~reset)              //异步清零，优先级高于计数
 //        begin
         out_counter <= 0;

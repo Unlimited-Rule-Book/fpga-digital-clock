@@ -42,7 +42,7 @@ reg button_debounced;           //按键消抖后的状态
 reg [$clog2(DEBOUNCE_MS)-1:0] debounce_counter;    // 消抖计数器
 
 // 同步按键输入（避免亚稳态）
-always @(posedge sys_clk or negedge reset) begin
+always @(posedge sys_clk) begin
     if (!reset) 
         button_sync <= 1'b1;  // 默认按键未按下（高电平）
     else
@@ -50,7 +50,7 @@ always @(posedge sys_clk or negedge reset) begin
 end
 
 // 按键消抖逻辑
-always @(posedge sys_clk or negedge reset) begin
+always @(posedge sys_clk) begin
     if (!reset)
     begin
         debounce_counter <= 0;

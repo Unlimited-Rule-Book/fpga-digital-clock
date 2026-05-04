@@ -43,11 +43,9 @@ assign  data = {seg[0],seg[1],seg[2],seg[3],seg[4],seg[5],seg[6],seg[7],sel};
 所以让sel的低位先输入没问题*/
 
 //cnt_4:分频计数器:0-3循环计数
-//always@(posedge sys_clk or negedge reset)
 always@(posedge sys_clk)
 begin
-//    if(!reset)
-    if(reset==1'b0)
+    if(!reset)
         cnt_4 <= 2'b00;
     else if(cnt_4 == 2'd3)
         cnt_4 <= 2'b00;
@@ -56,11 +54,9 @@ begin
 end
 
 //cnt_bit:传输位数寄存器，记录遍历data中的数据
-//always@(posedge sys_clk or negedge reset)
 always@(posedge sys_clk)
 begin
-//    if(!reset)
-    if(reset==1'b0)
+    if(!reset)
         cnt_bit <= 4'b0000;
     else if(cnt_bit==4'd13 && cnt_4==2'd3)
         cnt_bit <= 4'b0000;
@@ -71,11 +67,9 @@ begin
 end
 
 //stcp:14个信号传输完成后产生一个上升沿
-//always@(posedge sys_clk or negedge reset)
 always@(posedge sys_clk)
 begin
-//    if(!reset)
-    if(reset==1'b0)
+    if(!reset)
         stcp    <=  1'b0;
     else if(cnt_bit==4'd13 && cnt_4==2'd3)
         stcp    <=  1'b1;
@@ -84,11 +78,9 @@ begin
 end
 
 //shcp:产生四分频移位时钟
-//always@(posedge sys_clk or negedge reset)
 always@(posedge sys_clk)
 begin
-//    if(!reset)
-    if(reset==1'b0)
+    if(!reset)
         shcp <= 1'b0;
     else if(cnt_4 == 2'd2)
         shcp <= 1'b1;

@@ -64,7 +64,7 @@ reg     sec_clk_prev = 1'b1;
 
 //flag_1ms:数码管刷新时钟使能信号
 //  ----------------------------如需添加复位信号，则可将divider中的脉冲pulse引出，作为刷新时钟的复位信号--------------------------
-always@(posedge pre_clk or negedge reset)
+always@(posedge pre_clk)
 begin
     if(~reset)begin
         cnt_1ms <= 0;
@@ -78,7 +78,7 @@ begin
         cnt_1ms <= cnt_1ms + 1'b1;
 end
 
-always@(posedge sys_clk or negedge reset)
+always@(posedge sys_clk)
 begin
     if(~reset)begin
         seg_toggle_s1 <= 1'b0;
@@ -96,8 +96,8 @@ begin
 end
 
 //cnt_sel:位选信号计数器
-//always@(posedge seg_clk or negedge reset)
-always@(posedge sys_clk or negedge reset)
+//always@(posedge seg_clk)
+always@(posedge sys_clk)
 begin
     if(~reset)
     // if(reset==1'b0)
@@ -109,8 +109,8 @@ begin
 end
 
 //data_disp,sel:位选信号生成与控制六个数码管位选信号，使数码管轮流显示
-//always@(posedge seg_clk or negedge reset)
-always@(posedge sys_clk or negedge reset)
+//always@(posedge seg_clk)
+always@(posedge sys_clk)
 begin
     if(~reset)begin
     // if(reset==1'b0)begin 
@@ -123,14 +123,14 @@ begin
         3'd3:   begin data_disp   <=  out_minute[7:4];  sel <=  6'b00_1000; end
         3'd4:   begin data_disp   <=  out_hour[3:0];    sel <=  6'b01_0000; end
         3'd5:   begin data_disp   <=  out_hour[7:4];    sel <=  6'b10_0000; end
-        default:begin data_disp   <=  4'dx;             sel <=  6'b00_0000; end //异常：全不显示，data_disp也没有4'dx这个取值
+        default:begin data_disp   <=  4'd14;             sel <=  6'b00_0000; end //异常：全灭
         endcase
     end
 end
 
 //数码管数据显示，小数点以1s为周期闪烁
-//always@(posedge sys_clk or negedge reset)    //采用一样的时钟seg_clk
-always@(posedge sys_clk or negedge reset)
+//always@(posedge sys_clk)    //采用一样的时钟seg_clk
+always@(posedge sys_clk)
 begin
     if(~reset)
     // if(reset==1'b0)
@@ -142,8 +142,8 @@ begin
 end
 //但是sec_clk为边沿触发而非电平触发，
 //所以需要定义锁存器sec_clk_prev记录sec_clk上一时刻的状态
-//always@(posedge sys_clk or negedge reset)
-always@(posedge sys_clk or negedge reset)
+//always@(posedge sys_clk)
+always@(posedge sys_clk)
 begin
     if(~reset)
     // if(reset==1'b0)
@@ -154,8 +154,8 @@ end
 
 
 //point_disp:为了增强可读性，也为了使对小数点的操作更加灵活，设置小数点寄存器，低电平点亮，所以需要对输入信号取反
-//always@(posedge seg_clk or negedge reset)
-always@(posedge sys_clk or negedge reset)
+//always@(posedge seg_clk)
+always@(posedge sys_clk)
 begin
     if(~reset)
     // if(reset==1'b0)

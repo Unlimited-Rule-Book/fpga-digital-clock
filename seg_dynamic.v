@@ -14,9 +14,8 @@
 //
 // 段码约定（低电平点亮，共阳极数码管）：
 //   seg[7]=小数点, seg[6:0] 对应 g, f, e, d, c, b, a（bit6=g, bit0=a）
-//   当前支持数字0~9和字母A~F（4'd0~4'd15）
-//   ⚠ 若需显示 L、d 等字符（如置数模式的"LOAd"提示），需扩展 data_disp 位宽
-//     并在 case 语句中新增对应段码。
+//   当前支持数字0~9和字母L、A、d、C、全灭、全亮（4'd0~4'd15）
+//   ⚠ 对 data_disp 、 sel 赋值的case语句，这种逻辑下，disp最大只能是4位宽，因此无法显示更多字符
 //
 // 与 hc595_ctrl 的配合：
 //   sel（6位位选）和 seg（8位段选）送入 hc595_ctrl，
@@ -25,62 +24,58 @@
 module seg_dynamic
 (
 input   wire    sys_clk,
-input   wire    pre_clk,                //数码管刷新时钟，1us为周期，PLL生成
-input   wire    sec_clk,                //为实现数码管以1s为周期闪烁
-input   wire    reset,
+input   wire    pre_clk,                // 数码管刷新时钟，1us为周期，PLL生成
+input   wire    sec_clk,                // 为实现数码管以1s为周期闪烁
+input   wire    rst_n,
 input   wire    [7:0]   out_second,
 input   wire    [7:0]   out_minute,
 input   wire    [7:0]   out_hour,
 input   wire    [5:0]   point_out,
 
-// output  reg     seg_flag,//==========用于测试============
-// output  reg     seg_toggle,//==========用于测试============
-// output  reg     [2:0]   cnt_sel,//==========用于测试============
-// output  reg     [3:0]   data_disp, //==========用于测试============
-
-output  reg     [5:0]   sel = 6'b11_1111,  //数码管位选信号，初值为选中所有数码管
-output  reg     [7:0]   seg = 8'b0          //数码管段选信号，初值为点亮数码管的所有段
+output  reg     [5:0]   sel = 6'b11_1111,   // 数码管位选信号，初值为选中所有数码管
+output  reg     [7:0]   seg = 8'b0          // 数码管段选信号，初值为点亮数码管的所有段
 );
-//定义常量
-parameter   CNT_MAX = 10'd1000;            //数码管以1ms为周期进行扫描，待分频时钟1mhz计500个数后反转，刷新数码管的时钟的电平
 
+//  ====================  参数声明  ====================
+// 两级同步器 + 边沿检测XOR，生成数码管显示的使能信号seg_flag
+parameter   CNT_MS = 1000;
+// 期望数码管以1ms为周期进行扫描，待分频时钟1mhz计1000个数后反转，生成的seg_toggle是2ms为周期的。
+// seg_toggle进入同步逻辑，每次反转都会生成seg_flag脉冲，为1ms脉冲，刷新数码管的时钟的电平
+localparam  CNT_MAX = CNT_MS - 1'b1;
+
+//  ====================  定义中间变量  ====================
 //定义中间变量——数码管刷新时钟
-reg     [$clog2(CNT_MAX)-1:0]  cnt_1ms = 9'b0;         //1ms计数器，每1ms刷新一次数码管，24_999需要定义15位十进制数
-reg     seg_flag = 1'b0; //======用于测试===================
-reg     seg_toggle = 1'b0;   //======用于测试===================
+reg     [$clog2(CNT_MAX)-1:0]  cnt_ms;  // 2ms计数器，用于控制seg_toggle的反转
+reg     seg_flag = 1'b0;
+reg     seg_toggle = 1'b0;
 reg     seg_toggle_s1,  seg_toggle_s2,  seg_toggle_s3;
-
 //定义中间变量——数码管数据显示
-reg     [2:0]   cnt_sel = 3'b0;         //位选信号计数器   //======用于测试===================
-reg     [3:0]   data_disp = 4'b0;       //为了避免case语句嵌套，增强可读性，定义此变量位段选信号生成的中间变量，此变量不包含小数点
-   //======用于测试===================
-reg     point_en   = 1'b1;              //为了实现小数点以1s为周期闪烁而定义数码管使能信号
-reg     point_disp = 1'b0;              //当前数码管显示的小数点
+reg     [2:0]   cnt_sel = 3'b0;         // 位选信号计数器
+reg     [3:0]   data_disp = 4'b0;       // 为了避免case语句嵌套，增强可读性，定义此变量位段选信号生成的中间变量，此变量不包含小数点
 //定义锁存器——存储sec_clk在seg_clk的上一周期的值
 reg     sec_clk_prev = 1'b1;
+reg     point_en   = 1'b1;              // 为了实现小数点以1s为周期闪烁而定义数码管使能信号
+reg     point_disp = 1'b0;              // 当前数码管显示的小数点
 
-
-//  --------------------  主程序  --------------------
-
-//flag_1ms:数码管刷新时钟使能信号
+//  ====================  主程序  ====================
+//seg_flag:数码管刷新时钟使能信号
 //  ----------------------------如需添加复位信号，则可将divider中的脉冲pulse引出，作为刷新时钟的复位信号--------------------------
 always@(posedge pre_clk)
 begin
-    if(~reset)begin
-        cnt_1ms <= 0;
+    if(~rst_n)begin
+        cnt_ms <= 0;
         seg_toggle <= 1'b0;
     end
-    else if(cnt_1ms==CNT_MAX) begin
-        cnt_1ms <= 9'd0;        //如果pre_clk改了，这里0的大小也得从3改成其它数
+    else if(cnt_ms==CNT_MAX) begin
+        cnt_ms <= 0;
         seg_toggle <= ~seg_toggle;
     end
     else
-        cnt_1ms <= cnt_1ms + 1'b1;
+        cnt_ms <= cnt_ms + 1'b1;
 end
-
 always@(posedge sys_clk)
 begin
-    if(~reset)begin
+    if(~rst_n)begin
         seg_toggle_s1 <= 1'b0;
         seg_toggle_s2 <= 1'b0;
         seg_toggle_s3 <= 1'b0;
@@ -96,24 +91,20 @@ begin
 end
 
 //cnt_sel:位选信号计数器
-//always@(posedge seg_clk)
 always@(posedge sys_clk)
 begin
-    if(~reset)
-    // if(reset==1'b0)
-        cnt_sel <= 3'd0;
+    if(~rst_n)
+        cnt_sel <= 0;
     else if(cnt_sel==3'd5 && seg_flag)
-        cnt_sel <= 3'b0;
+        cnt_sel <= 0;
     else if (seg_flag)
         cnt_sel <= cnt_sel + 1'b1;
 end
 
 //data_disp,sel:位选信号生成与控制六个数码管位选信号，使数码管轮流显示
-//always@(posedge seg_clk)
 always@(posedge sys_clk)
 begin
-    if(~reset)begin
-    // if(reset==1'b0)begin 
+    if(~rst_n)begin
         data_disp <= 4'd15; sel <= 6'b11_1111; end    //复位：全显示
     else if(seg_flag)begin
         case(cnt_sel)
@@ -123,17 +114,15 @@ begin
         3'd3:   begin data_disp   <=  out_minute[7:4];  sel <=  6'b00_1000; end
         3'd4:   begin data_disp   <=  out_hour[3:0];    sel <=  6'b01_0000; end
         3'd5:   begin data_disp   <=  out_hour[7:4];    sel <=  6'b10_0000; end
-        default:begin data_disp   <=  4'd14;             sel <=  6'b00_0000; end //异常：全灭
+        default:begin data_disp   <=  4'd14;            sel <=  6'b00_0000; end //异常：全灭
         endcase
     end
 end
 
 //数码管数据显示，小数点以1s为周期闪烁
-//always@(posedge sys_clk)    //采用一样的时钟seg_clk
 always@(posedge sys_clk)
 begin
-    if(~reset)
-    // if(reset==1'b0)
+    if(~rst_n)
         point_en <= 1'b1;
     else if(sec_clk != sec_clk_prev)
         point_en <= ~point_en;
@@ -142,23 +131,17 @@ begin
 end
 //但是sec_clk为边沿触发而非电平触发，
 //所以需要定义锁存器sec_clk_prev记录sec_clk上一时刻的状态
-//always@(posedge sys_clk)
 always@(posedge sys_clk)
 begin
-    if(~reset)
-    // if(reset==1'b0)
+    if(~rst_n)
         sec_clk_prev <= 1'b1;
     else
         sec_clk_prev <= sec_clk;
 end
-
-
 //point_disp:为了增强可读性，也为了使对小数点的操作更加灵活，设置小数点寄存器，低电平点亮，所以需要对输入信号取反
-//always@(posedge seg_clk)
 always@(posedge sys_clk)
 begin
-    if(~reset)
-    // if(reset==1'b0)
+    if(~rst_n)
         point_disp <= 1'b0;
     else if(point_en==1'b1 && seg_flag)
         point_disp <= ~point_out[cnt_sel];
@@ -174,8 +157,7 @@ end
 //所以段选信号改为组合逻辑
 always@(*)
 begin
-    if(~reset)
-    // if(reset==1'b0)
+    if(~rst_n)
         seg <=  8'b0;                               //复位：全显示
     else
         begin
@@ -197,7 +179,7 @@ begin
         4'd14:  seg =   {point_disp,7'b111_1111};   //全灭
         4'd15:  seg =   8'b0;                       //全显示
         
-        // 请看上方对data_disp复制的case语句，这种逻辑下，disp无法被赋予15以上的值！！
+        // 请看上方对data_disp复制的case语句，这种逻辑下，disp最大只能是4位宽，无法被赋予15以上的值！！
         // 所以只能根据现有的需求，将需要的编码，不需要的只能舍弃
         // data_disp也没必要定义成5位宽的了
         // 5'd11:  seg =   {point_disp,7'b000_0011};   //显示数字B       

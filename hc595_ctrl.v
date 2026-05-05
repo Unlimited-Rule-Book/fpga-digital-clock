@@ -15,7 +15,7 @@
 module  hc595_ctrl
 (
 input   wire    sys_clk,
-input   wire    reset,
+input   wire    rst_n,
 input   wire    [5:0]   sel,
 input   wire    [7:0]   seg,
 
@@ -45,7 +45,7 @@ assign  data = {seg[0],seg[1],seg[2],seg[3],seg[4],seg[5],seg[6],seg[7],sel};
 //cnt_4:分频计数器:0-3循环计数
 always@(posedge sys_clk)
 begin
-    if(!reset)
+    if(!rst_n)
         cnt_4 <= 2'b00;
     else if(cnt_4 == 2'd3)
         cnt_4 <= 2'b00;
@@ -56,7 +56,7 @@ end
 //cnt_bit:传输位数寄存器，记录遍历data中的数据
 always@(posedge sys_clk)
 begin
-    if(!reset)
+    if(!rst_n)
         cnt_bit <= 4'b0000;
     else if(cnt_bit==4'd13 && cnt_4==2'd3)
         cnt_bit <= 4'b0000;
@@ -69,7 +69,7 @@ end
 //stcp:14个信号传输完成后产生一个上升沿
 always@(posedge sys_clk)
 begin
-    if(!reset)
+    if(!rst_n)
         stcp    <=  1'b0;
     else if(cnt_bit==4'd13 && cnt_4==2'd3)
         stcp    <=  1'b1;
@@ -80,7 +80,7 @@ end
 //shcp:产生四分频移位时钟
 always@(posedge sys_clk)
 begin
-    if(!reset)
+    if(!rst_n)
         shcp <= 1'b0;
     else if(cnt_4 == 2'd2)
         shcp <= 1'b1;

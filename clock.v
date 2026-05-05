@@ -33,13 +33,14 @@ input   wire    [7:0]   data_second,   //置数：秒
 input   wire    [7:0]   data_minute,   //置数：分
 input   wire    [7:0]   data_hour,     //置数：时
 
-output  wire    stcp,
-output  wire    shcp,
-output  wire    ds,  
-output  wire    oe,
+// // output  wire    stcp,
+// // output  wire    shcp,
+// // output  wire    ds,  
+// // output  wire    oe,
 output  wire    [7:0]   out_second, //输出一下，给置数模块使用
 output  wire    [7:0]   out_minute,
-output  wire    [7:0]   out_hour
+output  wire    [7:0]   out_hour,
+output  wire    [5:0]   point_out
 );
 
 //wire    [7:0]   data_second;
@@ -52,7 +53,7 @@ output  wire    [7:0]   out_hour
 //  ------  子模块连线声明（内部连接）  ------  
 // wire    sec_clk;
 // // wire    [7:0]   out_second, out_minute, out_hour; //端口处声明了，此处就注释了
-wire    [5:0]   point_out;                              
+// wire    [5:0]   point_out;  //端口处声明了，此处就注释了
 wire    [5:0]   sel;                          
 wire    [7:0]   seg;
 
@@ -109,34 +110,34 @@ counter_time    clock_counter_time
     .point_out          (point_out  )
 );   
 
-//数码管动态显示模块
-seg_dynamic     clock_seg_dynamic
-(
-    .sys_clk            (sys_clk   ),
-    .pre_clk            (pre_clk   ),
-    .sec_clk            (sec_clk   ),                
-    .reset              (reset     ),
-    .out_second         (out_second),
-    .out_minute         (out_minute),
-    .out_hour           (out_hour  ),
-    .point_out          (point_out ),
+// // //数码管动态显示模块
+// // seg_dynamic     clock_seg_dynamic
+// // (
+    // // .sys_clk            (sys_clk   ),
+    // // .pre_clk            (pre_clk   ),
+    // // .sec_clk            (sec_clk   ),                
+    // // .reset              (reset     ),
+    // // .out_second         (out_second),
+    // // .out_minute         (out_minute),
+    // // .out_hour           (out_hour  ),
+    // // .point_out          (point_out ),
 
-    .sel                (sel       ),  
-    .seg                (seg       )   
-);  
+    // // .sel                (sel       ),  
+    // // .seg                (seg       )   
+// // );  
 
-//74HC595控制模块
-hc595_ctrl      clock_hc595_ctrl
-(
-    .sys_clk            (sys_clk),
-    .reset              (reset  ),
-    .sel                (sel    ),
-    .seg                (seg    ),
+// // //74HC595控制模块
+// // hc595_ctrl      clock_hc595_ctrl
+// // (
+    // // .sys_clk            (sys_clk),
+    // // .reset              (reset  ),
+    // // .sel                (sel    ),
+    // // .seg                (seg    ),
 
-    .stcp               (stcp   ),           
-    .shcp               (shcp   ),           
-    .ds                 (ds     ),             
-    .oe                 (oe     )
-);
+    // // .stcp               (stcp   ),           
+    // // .shcp               (shcp   ),           
+    // // .ds                 (ds     ),             
+    // // .oe                 (oe     )
+// // );
 
 endmodule

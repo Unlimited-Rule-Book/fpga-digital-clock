@@ -36,7 +36,7 @@ output  wire    [5:0]  point_out
 
 //定义中间变量，设置“时”的个位的进制
 reg [3:0]   hour_radix = 4'b1001;
-//always@(posedge sec_clk or negedge reset)
+//注意，此逻辑只适用于加计数，减计数需根据借位后的十位判断个位的进制，故逻辑略有区别，具体键load_num模块
 always@(posedge sys_clk)
 begin
 //    if(!reset)

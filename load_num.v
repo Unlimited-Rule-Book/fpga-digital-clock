@@ -39,16 +39,21 @@ input   wire    num_down,
 input   wire    [7:0]   before_second,
 input   wire    [7:0]   before_minute,
 input   wire    [7:0]   before_hour,    //在时间置数中为当前时间，在闹钟置数中为上次设定的闹钟值
-input   wire    [5:0]   point_out,
+// input   wire    [5:0]   point_out,
 
 
 output  reg     [7:0]   data_second,
 output  reg     [7:0]   data_minute,
 output  reg     [7:0]   data_hour,
-output  wire    stcp,
-output  wire    shcp,
-output  wire    ds,
-output  wire    oe
+// // output  wire    stcp,
+// // output  wire    shcp,
+// // output  wire    ds,
+// // output  wire    oe
+output  wire    [7:0]   disp_second,
+output  wire    [7:0]   disp_minute,
+output  wire    [7:0]   disp_hour  ,
+output  wire    [5:0]   point_out
+
 );
 
 //load或load_confirm（确认置数）后，都进行一次复位
@@ -237,21 +242,6 @@ localparam  SET_MINUTE = 2'b01;
 localparam  SET_SECOND = 2'b10;
 //定义时分秒计数脉冲状态机
 reg [1:0]   current_set = SET_HOUR;
-// // // //对时/分/秒进行选择
-// // // always@(posedge choose)
-// // // begin
-    // // // if(!reset_n)
-        // // // current_set <= 2'b00;
-    // // // else begin
-        // // // if(set_en) begin               // 使能状态机的使能信号
-            // // // if(current_set == 2'b10)
-                // // // current_set <= 2'b0;
-            // // // else
-                // // // current_set <= current_set + 1'b1;
-        // // // end
-        // // // else current_set <= current_set // 非使能时维持原值
-    // // // end
-// // // end
 //定义时分秒计数信号脉冲
 reg sec_pulse = 1'b0;
 reg min_pulse = 1'b0;
@@ -259,18 +249,15 @@ reg hor_pulse = 1'b0;
 //num_up与num_down采用跳沿检测
 reg num_up_prev = 1'b1;
 reg num_down_prev = 1'b1;//默认按键未按下
-//在set_en第一次使能时，“按下”load_before，将此时的时间输出到数码管
-reg load_before_cnt = 1'b0; //load_before只能按一次
-reg load_before = 1'b1;
-
+//每次set_en使能（上跳沿），对current_set重置为SET_HOUR
+reg set_en_prev;// 对set_en采用跳沿检测
 
 //状态机、时分秒计数脉冲产生
 always@(posedge sys_clk)
 begin
     if(!reset_n)
     begin
-        load_before_cnt <= 1'b0;
-        load_before     <= 1'b1;
+        set_en_prev     <= 1'b0;
         current_set     <= SET_HOUR;
         num_up_prev     <= 1'b1;
         num_down_prev   <= 1'b1;
@@ -278,16 +265,15 @@ begin
         min_pulse <= 1'b0;      
         hor_pulse <= 1'b0;         
     end
-    else begin 
+    else begin
+    set_en_prev <= set_en;
+    if(set_en_prev==1'b0 && set_en==1'b1)
+        current_set <=  SET_HOUR;
+    else
+        load_before <= load_before; 
+    // 上面这部分综合以后，相当于是加在了SET_MINUTE、SET_SECOND状态切换到SET_HOUR状态的条件
+    // （可以去看看RTL视图）与在下面加是一样的，但是还是选择夹在前面吧，体现出心路历程
     if(set_en) begin               // 使能状态机的使能信号
-        //第一个时钟周期进行一次置数，把按下set_en使能后的时间进行显示
-        if (load_before_cnt==1'b0)begin
-            load_before <= 1'b0;
-            load_before_cnt<=1'b1;
-        end
-        else
-            load_before <= 1'b1;
-    
         case(current_set)
         SET_HOUR:
         begin
@@ -321,12 +307,17 @@ begin
             hor_pulse <= 1'b0;
             twinkle <= TWINKLE_MINUTE;    // 用于控制该数位闪烁
 
-            if((num_up_prev==1'b1&&num_up==1'b0) || (num_down_prev==1'b1&&num_down==1'b0))
+            // if((num_up_prev==1'b1&&num_up==1'b0) || (num_down_prev==1'b1&&num_down==1'b0))
+                // min_pulse <= 1'b1;
+            // else if(((num_up_prev==1'b0&&num_up==1'b1) || (num_down_prev==1'b0&&num_down==1'b1)))
+                // min_pulse <= 1'b0;
+            // else
+                // min_pulse <= min_pulse;
+            if((~num_up_pulse) || (~num_down_pulse))
                 min_pulse <= 1'b1;
-            else if(((num_up_prev==1'b0&&num_up==1'b1) || (num_down_prev==1'b0&&num_down==1'b1)))
-                min_pulse <= 1'b0;
             else
-                min_pulse <= min_pulse;
+                min_pulse <= 1'b0;
+                
             if(~choose_pulse) current_set <= SET_SECOND;    // choose低有效
         end        
         SET_SECOND:
@@ -337,12 +328,17 @@ begin
             hor_pulse <= 1'b0;
             twinkle <= TWINKLE_SECOND;    // 用于控制该数位闪烁
         
-            if((num_up_prev==1'b1&&num_up==1'b0) || (num_down_prev==1'b1&&num_down==1'b0))
-                sec_pulse <= 1'b1;
-            else if(((num_up_prev==1'b0&&num_up==1'b1) || (num_down_prev==1'b0&&num_down==1'b1)))
-                sec_pulse <= 1'b0;
-            else
-                sec_pulse <= sec_pulse;
+            // if((num_up_prev==1'b1&&num_up==1'b0) || (num_down_prev==1'b1&&num_down==1'b0))
+                // sec_pulse <= 1'b1;
+            // else if(((num_up_prev==1'b0&&num_up==1'b1) || (num_down_prev==1'b0&&num_down==1'b1)))
+                // sec_pulse <= 1'b0;
+            // else
+                // sec_pulse <= sec_pulse;
+                if((~num_up_pulse) || (~num_down_pulse))
+                    sec_pulse <= 1'b1;
+                else
+                    sec_pulse <= 1'b0;
+    
             if(~choose_pulse) current_set <= SET_HOUR;//    choose低有效
         end        
         default: //----------------------后期应当修改------------------------------
@@ -365,6 +361,26 @@ begin
     end
 end
 
+// ================================================================================================================
+// 在mode_en第一次使能时，“按下”load_before，将此时的时间输出到数码管
+reg mode_en_prev;// 对mode_en采用跳沿检测
+reg load_before = 1'b1;
+
+always@(posedge sys_clk)
+begin
+    if(!reset_n)
+    begin
+        mode_en_prev <= 1'b0;
+        load_before     <= 1'b1;
+            // 对mode_en跳沿检测，load_before低电平脉冲置数，ready_hour等显示按下load时的数字。
+    end
+    mode_en_prev <= mode_en;
+    if(mode_en_prev==1'b0 && mode_en==1'b1)
+        load_before <= 1'b0;
+    else
+        load_before <= 1'b1;
+end     
+// ================================================================================================================
 
 //定义进位信号中间值
 wire    [5:0]   RCO_zhong;
@@ -373,23 +389,39 @@ wire [7:0]   load_hour;
 wire [7:0]   load_minute;
 wire [7:0]   load_second;
 //将中间值暂存下来
-reg  [7:0]   ready_hour = 8'b00;
+reg  [7:0]   ready_hour = 8'b00;        // 改名：twinkle_*
 reg  [7:0]   ready_minute = 8'b00;
 reg  [7:0]   ready_second = 8'b00;
 
 //定义中间变量，设置“时”的个位的进制
-reg [3:0]   hour_radix = 4'b1001;
+wire [3:0]   hour_radix;
+reg  [3:0]   hour_radix_up;
+reg  [3:0]   hour_radix_down;
+// 加计数进制动态显示
 always@(posedge sys_clk)
 begin
     if(!reset_n)
-    hour_radix <= 4'b1001;
-    else if(hor_pulse && ready_hour[7:4]==4'b0010)
-    hour_radix <= 4'b0011;
-    else if(hor_pulse && (ready_hour[7:4]==4'b0001)||(ready_hour[7:4]==4'b0000))
-    hour_radix <= 4'b1001;
+        hour_radix_up <= 4'b1001;
+    else if(mode_updown==1'b0 && load_hour[7:4]==4'b0010)
+        hour_radix_up <= 4'b0011;
+    else if(mode_updown==1'b0 && (load_hour[7:4]==4'b0001 || load_hour[7:4]==4'b0000))
+        hour_radix_up <= 4'b1001;
     else
-    hour_radix <= hour_radix;
+        hour_radix_up <= hour_radix_up;
 end
+// 减计数进制动态显示
+always@(posedge sys_clk)
+begin
+    if(!reset_n)
+        hour_radix_down <= 4'b1001;
+    else if(mode_updown==1'b1 && load_hour[7:4]==4'b0000)
+        hour_radix_down <= 4'b0011;
+    else if(mode_updown==1'b1 && (load_hour[7:4]==4'b0001 || load_hour[7:4]==4'b0010))
+        hour_radix_down <= 4'b1001;
+    else
+        hour_radix_down <= hour_radix_down;
+end
+assign hour_radix = mode_updown==1'b0 ? hour_radix_up : hour_radix_down;
 
 //实例化
 counter sec0(sys_clk,sec_pulse,reset_n,load_before,before_second[3:0],4'b1001,   1'b1        ,1'b0,mode_updown,load_second[3:0],RCO_zhong[0], ),
@@ -403,37 +435,37 @@ counter sec0(sys_clk,sec_pulse,reset_n,load_before,before_second[3:0],4'b1001,  
 // 注：从右往左数第1个数字代表着counter的point_in输入口，此端口其实不需要输入，但是未用的输入端口则必须提供一个确定的值
 // 而最右侧的输出端口point_out_counter也不需要，就暂时悬空
 
-// 控制置数时的数字显示，
+// 控制置数时的数字显示，当mode_en使能时，将当前时刻时钟的值赋予ready_*
 always@(posedge sys_clk)         // 状态机牛逼！！！
 begin
 if(!reset_n)begin
-    ready_minute <= load_minute; 
-    ready_second <= load_second;
-    ready_hour <= load_hour;
+    ready_minute <= before_minute; 
+    ready_second <= before_second;
+    ready_hour   <= before_hour;
 end
 else begin
     case(twinkle)
         TWINKLE_HOUR:
         begin
             ready_minute <= load_minute; ready_second <= load_second;
-            if(sec_clk)         ready_hour <= 4'd14;
+            if(sec_clk)         ready_hour <= {4'd14,4'd14};
             else if(~sec_clk)   ready_hour <= load_hour; // sec_clk高电平时输出正常数字，低电平时传入31，即全灭
         end
         TWINKLE_MINUTE:
         begin
             ready_hour <= load_hour; ready_second <= load_second;
-            if(sec_clk)         ready_minute <= 4'd14;
+            if(sec_clk)         ready_minute <= {4'd14,4'd14};
             else if(~sec_clk)   ready_minute <= load_minute; // sec_clk高电平时输出正常数字，低电平时传入31，即全灭
         end
         TWINKLE_SECOND:
         begin
             ready_hour <= load_hour; ready_minute <= load_minute;
-            if(sec_clk)         ready_second <= 4'd14;
+            if(sec_clk)         ready_second <= {4'd14,4'd14};
             else if(~sec_clk)   ready_second <= load_second; // sec_clk高电平时输出正常数字，低电平时传入31，即全灭    
         end
         default: begin  // 与TWINKLE_HOUR相同
             ready_minute <= load_minute; ready_second <= load_second;
-            if(sec_clk)         ready_hour <= 4'd14;
+            if(sec_clk)         ready_hour <= {4'd14,4'd14};
             else if(~sec_clk)   ready_hour <= load_hour;
         end
     endcase
@@ -452,15 +484,15 @@ begin
     else if(mode_en) begin               // 使能信号
         if(!load_confirm)
         begin
-            data_hour <= ready_hour;
-            data_minute <= ready_minute;
-            data_second <= ready_second;
+            data_hour   <= load_hour;
+            data_minute <= load_minute;
+            data_second <= load_second;
         end
         else
         begin
-            data_hour <= before_hour;
-            data_minute <= before_minute;
-            data_second <= before_second;
+            data_hour   <= data_hour  ;
+            data_minute <= data_minute;
+            data_second <= data_second;
         end
     end
 end
@@ -496,41 +528,43 @@ wire    [7:0]   seg;
 // wire    [7:0]   disp_minute = (current_load==LOAD_SHOW) ? {SHOW_O, SHOW_A}     : ready_minute;
 // wire    [7:0]   disp_second = (current_load==LOAD_SHOW) ? {SHOW_d, SHOW_EMPTY} : ready_second;
 // 增加完全关闭时的保护
-wire    [7:0]   disp_hour   = (mode_en && current_load==LOAD_SHOW) ? {SHOW_EMPTY, SHOW_L} : 
-                              (mode_en ? ready_hour : 8'hFF);
-wire    [7:0]   disp_minute = (mode_en && current_load==LOAD_SHOW) ? {SHOW_O, SHOW_A}     : 
-                              (mode_en ? ready_minute : 8'hFF);
-wire    [7:0]   disp_second = (mode_en && current_load==LOAD_SHOW) ? {SHOW_d, SHOW_EMPTY} : 
-                              (mode_en ? ready_second : 8'hFF);
+assign  disp_hour   = (mode_en && current_load==LOAD_SHOW) ? {SHOW_EMPTY, SHOW_L} : 
+                      (mode_en ? ready_hour : 8'hFF);
+assign  disp_minute = (mode_en && current_load==LOAD_SHOW) ? {SHOW_O, SHOW_A}     : 
+                      (mode_en ? ready_minute : 8'hFF);
+assign  disp_second = (mode_en && current_load==LOAD_SHOW) ? {SHOW_d, SHOW_EMPTY} : 
+                      (mode_en ? ready_second : 8'hFF);
+                              
+assign point_out = 6'b010100;
 
-//数码管动态显示模块
-seg_dynamic     load_num_seg_dynamic
-(
-    .sys_clk            (sys_clk   ),
-    .pre_clk            (pre_clk    ),
-    .sec_clk            (sec_clk   ),                
-    .reset              (reset_n   ),
-    .out_second         (disp_second),
-    .out_minute         (disp_minute),
-    .out_hour           (disp_hour  ),
-    .point_out          (point_out  ),
+// // //数码管动态显示模块
+// // seg_dynamic     load_num_seg_dynamic
+// // (
+    // // .sys_clk            (sys_clk   ),
+    // // .pre_clk            (pre_clk    ),
+    // // .sec_clk            (sec_clk   ),                
+    // // .reset              (reset_n   ),
+    // // .out_second         (disp_second),
+    // // .out_minute         (disp_minute),
+    // // .out_hour           (disp_hour  ),
+    // // .point_out          (point_out  ),
 
-    .sel                (sel       ),  
-    .seg                (seg       )   
-);  
+    // // .sel                (sel       ),  
+    // // .seg                (seg       )   
+// // );  
 
-//74HC595控制模块
-hc595_ctrl      load_num_hc595_ctrl
-(
-    .sys_clk            (sys_clk),
-    .reset              (reset_n),
-    .sel                (sel    ),
-    .seg                (seg    ),
+// // //74HC595控制模块
+// // hc595_ctrl      load_num_hc595_ctrl
+// // (
+    // // .sys_clk            (sys_clk),
+    // // .reset              (reset_n),
+    // // .sel                (sel    ),
+    // // .seg                (seg    ),
 
-    .stcp               (stcp   ),           
-    .shcp               (shcp   ),           
-    .ds                 (ds     ),             
-    .oe                 (oe     )
-);
+    // // .stcp               (stcp   ),           
+    // // .shcp               (shcp   ),           
+    // // .ds                 (ds     ),             
+    // // .oe                 (oe     )
+// // );
 
 endmodule

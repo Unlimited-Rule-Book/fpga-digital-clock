@@ -49,23 +49,26 @@ input   wire    choose,
 input   wire    num_up,
 input   wire    num_down,
 
-// // // output  wire    stcp,
-// // // output  wire    shcp,
-// // // output  wire    ds,  
-// // // output  wire    oe   
+
 // 将赋值加入状态机中，所以得改一下
 
 // output  reg     load_s_pulse,
 // output  reg     load_l_pulse,
 // output  reg    [1:0] MODE,
 // output  wire    pulse_1ms,
+// output  wire    load_bs_s,
+// output  wire    load_bs_l,
 
 
-output  reg     stcp,
-output  reg     shcp,
-output  reg     ds,  
-output  reg     oe  
 
+// // output  reg     stcp,
+// // output  reg     shcp,
+// // output  reg     ds,  
+// // output  reg     oe  
+output  wire    stcp,
+output  wire    shcp,
+output  wire    ds,  
+output  wire    oe   
 );
 
 wire sys_clk_1mhz;
@@ -113,7 +116,7 @@ wire    choose_bs;
 wire    num_up_bs;
 wire    num_down_bs; 
 // 按键消抖模块接口已改为pulse_1ms计数，参数单位为ms
-button_stabilization #(.DEBOUNCE_MS(1))        // 为了test bench从20ms改成1ms======================================================
+button_stabilization #(.DEBOUNCE_MS(20))        // 为了test bench从20ms改成1ms======================================================
                         //load_b_s     (sys_clk, rst_n, load, load_bs),
                         choose_b_s   (sys_clk, pulse_1ms, rst_n, choose, choose_bs),
                         num_up_b_s   (sys_clk, pulse_1ms, rst_n, num_up, num_up_bs),
@@ -124,11 +127,20 @@ button_stabilization #(.DEBOUNCE_MS(1))        // 为了test bench从20ms改成1
 reg     load_s_pulse;// 为了test bench从取出这两个变量===================================================================================================================
 reg     load_l_pulse;
 // 从按键消抖模块中取出的长短按load
-wire    load_bs_s;
+wire    load_bs_s;// 为了test bench从取出这两个变量===================================================================================================================
 wire    load_bs_l;
 // 按键消抖+长短按模块接口已改为pulse_1ms计数，LONG_PRESS_MS单位为ms
-button_stabilization_long_short #(.DEBOUNCE_MS(1), .SHORT_END_MS(500), .LONG_PRESS_MS(3_000)) // 为了test bench短按从20ms改成1ms======================================================
-                                load_b_s_l_s    (sys_clk, pulse_1ms, rst_n, load, load_bs_s, load_bs_l);
+button_stabilization_long_short #(.DEBOUNCE_MS(1), .SHORT_END_MS(500), .LONG_PRESS_MS(3000)) // 为了test bench短按从20ms改成1ms，短按停止从500改成5，长按判定从3000改成7======================================================
+load_b_s_l_s    
+(
+    .sys_clk        (sys_clk),    
+    // .pre_clk        (sys_clk_1mhz),  
+    .reset          (rst_n),      
+    .button_in      (load),  
+    
+    .short_press    (load_bs_s),
+    .long_press     (load_bs_l) 
+);
 // 记录上次长短按信号，以便产生脉冲
 reg    load_bs_s_prev;
 reg    load_bs_l_prev;
@@ -210,21 +222,43 @@ reg     num_down_load_num;
 
 //时钟、置数、闹钟模式的输出都需控制
 //子模块连线----输出控制
+// // //时钟模式
+// // wire    stcp_clock;
+// // wire    shcp_clock;
+// // wire    ds_clock;  
+// // wire    oe_clock;  
+// // //置数模式
+// // wire    stcp_load_num;
+// // wire    shcp_load_num;
+// // wire    ds_load_num;  
+// // wire    oe_load_num;  
+// // //闹钟模式========================================================================
+// // // wire    stcp_alarm;
+// // // wire    shcp_alarm;
+// // // wire    ds_alarm;  
+// // // wire    oe_alarm;  
 //时钟模式
-wire    stcp_clock;
-wire    shcp_clock;
-wire    ds_clock;  
-wire    oe_clock;  
+wire    [7:0]   disp_second_clock;
+wire    [7:0]   disp_minute_clock;
+wire    [7:0]   disp_hour_clock  ;
+wire    [5:0]   point_disp_clock ; 
 //置数模式
-wire    stcp_load_num;
-wire    shcp_load_num;
-wire    ds_load_num;  
-wire    oe_load_num;  
+wire    [7:0]   disp_second_num;
+wire    [7:0]   disp_minute_num;
+wire    [7:0]   disp_hour_num  ;
+wire    [5:0]   point_disp_num ; 
 //闹钟模式========================================================================
-// wire    stcp_alarm;
-// wire    shcp_alarm;
-// wire    ds_alarm;  
-// wire    oe_alarm;  
+// wire    [7:0]   disp_second_alarm;
+// wire    [7:0]   disp_minute_alarm;
+// wire    [7:0]   disp_hour_alarm  ;
+// wire    [5:0]   point_disp_alarm ;
+
+// 汇总输出，向clock_mode里的seg_dynamic输出
+reg     [7:0]   disp_second;
+reg     [7:0]   disp_minute;
+reg     [7:0]   disp_hour  ;
+reg     [5:0]   point_disp ;
+
 
 
 
@@ -251,7 +285,6 @@ parameter COUNTER_16S_TIME = 16;     // 长按时间16秒
 localparam COUNTER_16S_COUNT = PULSE_1MS * COUNTER_16S_TIME;      // 16秒计数值
 
 reg [$clog2(COUNTER_16S_COUNT)-1:0]  counter_16s=0;
-reg [1:0]   counter_load_wait=2'b0;
 reg [2:0]   prev=3'b111;      //记录输入信号之前的值（num_up、num_down、choose），按系统时钟更新
 wire[2:0]   now;
 assign      now={choose_bs,num_up_bs,num_down_bs};//现在的值，实时更新
@@ -270,10 +303,15 @@ begin
         num_up_load_num  <= 1'b1;
         num_down_load_num<= 1'b1;
         // 输出控制
-        stcp    <=  stcp_clock;
-        shcp    <=  shcp_clock;
-        ds      <=  ds_clock;  
-        oe      <=  oe_clock;
+        // // stcp    <=  stcp_clock;
+        // // shcp    <=  shcp_clock;
+        // // ds      <=  ds_clock;  
+        // // oe      <=  oe_clock;
+        disp_second <= disp_second_clock;
+        disp_minute <= disp_minute_clock;
+        disp_hour   <= disp_hour_clock  ;
+        point_disp  <= point_disp_clock ; 
+        
     end
     else begin
         case(MODE)
@@ -287,10 +325,15 @@ begin
             num_up_load_num  <= 1'b1;
             num_down_load_num<= 1'b1;
             // 输出控制
-            stcp    <=  stcp_clock;
-            shcp    <=  shcp_clock;
-            ds      <=  ds_clock;  
-            oe      <=  oe_clock;
+            // // stcp    <=  stcp_clock;
+            // // shcp    <=  shcp_clock;
+            // // ds      <=  ds_clock;  
+            // // oe      <=  oe_clock;
+            disp_second <= disp_second_clock;
+            disp_minute <= disp_minute_clock;
+            disp_hour   <= disp_hour_clock  ;
+            point_disp  <= point_disp_clock ;
+            
             if(~load_s_pulse)begin
                 MODE <= MODE_LOAD;
             end
@@ -309,38 +352,33 @@ begin
             num_up_load_num  <= num_up_bs;
             num_down_load_num<= num_down_bs;
             //输出控制
-            stcp    <=  stcp_load_num;
-            shcp    <=  shcp_load_num;
-            ds      <=  ds_load_num;  
-            oe      <=  oe_load_num;  
+            // // stcp    <=  stcp_load_num;
+            // // shcp    <=  shcp_load_num;
+            // // ds      <=  ds_load_num;  
+            // // oe      <=  oe_load_num;  
+            disp_second <= disp_second_num;
+            disp_minute <= disp_minute_num;
+            disp_hour   <= disp_hour_num  ;
+            point_disp  <= point_disp_num ;
         
             prev <= {choose_bs,num_up_bs,num_down_bs};
-            if(load_s_pulse==1'b0&&load_l_pulse==1'b1)begin
-                if(counter_load_wait < 2'b11) //load短按，等待2个时钟周期后，切换为闹钟模式
-                    counter_load_wait <= counter_load_wait + 1'b1;
-                else begin
-                    counter_load_wait <= 2'b0;
+            if(load_s_pulse==1'b0&&load_l_pulse==1'b1)begin//load短按，切换为闹钟模式
                     counter_16s <= 0;
                     // 测试load_num阶段，禁用alarm
                     // // // MODE <= MODE_ALARM;
                     MODE <= MODE_CLOCK;
-                end
             end
             
-            else if(load_s_pulse==1'b1&&load_l_pulse==1'b0)begin
-                if(counter_load_wait < 2'b11) //load长按，等待2个时钟周期后，切换回时钟模式
-                    counter_load_wait <= counter_load_wait + 1'b1;
-                else begin
-                    counter_load_wait <= 2'b0;
+            else if(load_s_pulse==1'b1&&load_l_pulse==1'b0)begin//load长按，切换为时钟模式
                     counter_16s <= 0;
                     MODE <= MODE_CLOCK;
-                end
             end            
             
             else if(now != prev)       
                  counter_16s <= 0;           
-            else if(now == prev && counter_16s < COUNTER_16S_COUNT)
+            else if(now == prev && counter_16s < COUNTER_16S_COUNT)begin
                 if (pulse_1ms) counter_16s <= counter_16s + 1'b1;
+            end // 这里的begin-end必须加，否则下一行的else就会匹配if(pulse_1ms)而不会匹配正确的if
             else if(now == prev && counter_16s >= COUNTER_16S_COUNT)begin
                 counter_16s <= 0;
                 MODE <= MODE_CLOCK;
@@ -358,28 +396,7 @@ begin
         
             // // // //同上，输入输出控制
         
-            // // // prev <= {choose_bs,num_up_bs,num_down_bs};
-            // // // if(load_s_pulse==1'b0||load_l_pulse==1'b0)begin
-                // // // if(counter_load_wait < 2'b11) //load短按或长按，等待2个时钟周期后，切换回时钟模式
-                    // // // counter_load_wait <= counter_load_wait + 1'b1;
-                // // // else begin
-                    // // // counter_load_wait <= 2'b0;
-                    // // // counter_16s <= 0;
-                    // // // MODE <= MODE_CLOCK;     // 修改前是MODE <= MODE_ALARM;
-                // // // end
-            // // // end
-            // // // else if(now != prev)       
-                 // // // counter_16s <= 0;           
-            // // // else if(now == prev && counter_16s < COUNTER_16S_COUNT)
-                // // // if (pulse_1ms) counter_16s <= counter_16s + 1'b1;
-            // // // else if(now == prev && counter_16s >= COUNTER_16S_COUNT)begin
-                // // // counter_16s <= 0;
-                // // // MODE <= MODE_CLOCK;
-            // // // end
-            // // // else begin
-                // // // counter_16s <= counter_16s;
-                // // // MODE <= MODE;
-            // // // end
+
         // // // end
         
         
@@ -394,10 +411,15 @@ begin
             num_up_load_num  <= 1'b1;
             num_down_load_num<= 1'b1;
             // 输出控制
-            stcp    <=  stcp_clock;
-            shcp    <=  shcp_clock;
-            ds      <=  ds_clock;  
-            oe      <=  oe_clock;
+            // // stcp    <=  stcp_clock;
+            // // shcp    <=  shcp_clock;
+            // // ds      <=  ds_clock;  
+            // // oe      <=  oe_clock;
+            disp_second <= disp_second_clock;
+            disp_minute <= disp_minute_clock;
+            disp_hour   <= disp_hour_clock  ;
+            point_disp  <= point_disp_clock ;           
+
             if(~load_s_pulse)begin
                 MODE <= MODE_LOAD;
             end
@@ -430,16 +452,20 @@ end
 //时钟模式----实例化
 //时钟的置数信号：无论长按短按都会触发置数（长按、短按均为低电平触发，所以相与后为clock的load输入）
 wire    load_clock;
-// assign  load_clock = load_s_pulse && load_l_pulse; //???不应该是长按才触发置数吗？=======================================更改============
-assign  load_clock = load_l_pulse; 
+// load_num中，data_hour等的更新与clock-counter_time-counter加载置数值在同一个时钟沿
+// 在同步时钟下，counter读到的是沿前值，所以要对load_clock延时一个周期
+reg     load_l_pulse_delay;
+always@(posedge sys_clk) load_l_pulse_delay <= load_l_pulse;
+assign load_clock = load_l_pulse_delay;
+
 wire    [7:0]   data_second;
 wire    [7:0]   data_minute;   
 wire    [7:0]   data_hour;   
-//时钟与置数连线----实例化
-wire    [7:0]   out_second;       //---------------
-wire    [7:0]   out_minute;       //---------------
-wire    [7:0]   out_hour  ;       //---------------
-wire    [5:0]   point_out;        //---------------
+// // //时钟与置数连线----实例化
+// // wire    [7:0]   out_second;       //---------------
+// // wire    [7:0]   out_minute;       //---------------
+// // wire    [7:0]   out_hour  ;       //---------------
+// // wire    [5:0]   point_out;        //---------------
 clock   clock_mode_clock
 (
     .sys_clk    (sys_clk    ),
@@ -453,21 +479,22 @@ clock   clock_mode_clock
     .data_hour  (data_hour  ),    
     
 
-    .stcp       (stcp_clock),
-    .shcp       (shcp_clock),
-    .ds         (ds_clock  ),  
-    .oe         (oe_clock  ),
-    .out_second (out_second),
-    .out_minute (out_minute),
-    .out_hour   (out_hour  )
+    // .stcp       (stcp_clock),
+    // .shcp       (shcp_clock),
+    // .ds         (ds_clock  ),  
+    // .oe         (oe_clock  ),
+    .out_second (disp_second_clock),
+    .out_minute (disp_minute_clock),
+    .out_hour   (disp_hour_clock  ),
+    .point_out  (point_disp_clock )//=============================
 );
 
 
 //置数模式
-// // assign  out_second = 8'b0000_0000;        //---------------
-// // assign  out_minute = 8'b0000_0110;        //---------------
-// // assign  out_hour   = 8'b0001_0101;        //---------------
-assign  point_out  = 6'b010100;   //---------------
+// // // // // assign  out_second = 8'b0000_0000;        //---------------
+// // // // // assign  out_minute = 8'b0000_0110;        //---------------
+// // // // // assign  out_hour   = 8'b0001_0101;        //---------------
+// // assign  point_out  = 6'b010100;   //---------------
 load_num    clock_mode_load_num
 (
     .mode_en         (mode_load_en),
@@ -480,18 +507,22 @@ load_num    clock_mode_load_num
     .choose          (choose_load_num  ),
     .num_up          (num_up_load_num  ),
     .num_down        (num_down_load_num),
-    .before_second   (out_second),//---------------
-    .before_minute   (out_minute),//---------------
-    .before_hour     (out_hour  ),//---------------
-    .point_out       (point_out    ),//------------
+    .before_second   (disp_second_clock),//---------------
+    .before_minute   (disp_minute_clock),//---------------
+    .before_hour     (disp_hour_clock  ),//---------------
+    // .point_out       (point_out    ),
 
     .data_second     (data_second  ),
     .data_minute     (data_minute  ),
     .data_hour       (data_hour    ),
-    .stcp            (stcp_load_num),
-    .shcp            (shcp_load_num),
-    .ds              (ds_load_num  ),
-    .oe              (oe_load_num  )
+    // .stcp            (stcp_load_num),
+    // .shcp            (shcp_load_num),
+    // .ds              (ds_load_num  ),
+    // .oe              (oe_load_num  )
+    .disp_second    (disp_second_num),
+    .disp_minute    (disp_minute_num),
+    .disp_hour      (disp_hour_num  ),
+    .point_out      (point_disp_num)
 );
 
 //闹钟模式----实例化
@@ -507,8 +538,8 @@ load_num    clock_mode_load_num
 //wire    sec_clk;
 //wire    [7:0]   out_second, out_minute, out_hour; 
 //wire    [5:0]   point_out;                              
-//wire    [5:0]   sel;                          
-//wire    [7:0]   seg;
+wire    [5:0]   sel;                          
+wire    [7:0]   seg;
 //wire    load_bs;
 //wire    reset_p;
 //
@@ -552,33 +583,34 @@ load_num    clock_mode_load_num
 //    .point_out          (point_out  )
 //);   
 //
-////数码管动态显示模块
-//seg_dynamic     clock_seg_dynamic
-//(
-//    .sys_clk            (sys_clk   ),
-//    .sec_clk            (sec_clk   ),                
-//    .reset              (rst_n     ),
-//    .out_second         (out_second),
-//    .out_minute         (out_minute),
-//    .out_hour           (out_hour  ),
-//    .point_out          (point_out ),
-//
-//    .sel                (sel       ),  
-//    .seg                (seg       )   
-//);  
-//
-////74HC595控制模块
-//hc595_ctrl      clock_hc595_ctrl
-//(
-//    .sys_clk            (sys_clk),
-//    .reset              (rst_n  ),
-//    .sel                (sel    ),
-//    .seg                (seg    ),
-//
-//    .stcp               (stcp   ),           
-//    .shcp               (shcp   ),           
-//    .ds                 (ds     ),             
-//    .oe                 (oe     )
-//);
+//数码管动态显示模块
+seg_dynamic     clock_seg_dynamic
+(
+   .sys_clk            (sys_clk   ),
+   .pre_clk            (sys_clk_1mhz),   
+   .sec_clk            (sec_clk   ), 
+   .reset              (rst_n     ),
+   .out_second         (disp_second),
+   .out_minute         (disp_minute),
+   .out_hour           (disp_hour  ),
+   .point_out          (point_disp ),
+
+   .sel                (sel       ),  
+   .seg                (seg       )   
+);  
+
+//74HC595控制模块
+hc595_ctrl      clock_hc595_ctrl
+(
+   .sys_clk            (sys_clk),
+   .reset              (rst_n  ),
+   .sel                (sel    ),
+   .seg                (seg    ),
+
+   .stcp               (stcp   ),           
+   .shcp               (shcp   ),           
+   .ds                 (ds     ),             
+   .oe                 (oe     )
+);
 
 endmodule

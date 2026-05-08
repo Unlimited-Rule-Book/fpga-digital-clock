@@ -43,27 +43,44 @@ output  wire    [5:0]   point_out
 );
 //  ====================  实例化六次通用计数器  ====================
 //定义中间变量，设置“时”的个位的进制
-reg [3:0]   hour_radix = 4'b1001;
+reg [3:0]   hour_radix_clockonly = 4'b1001;
 //注意，此逻辑只适用于加计数，减计数需根据借位后的十位判断个位的进制，故逻辑略有区别，具体键load_num模块
 always@(posedge sys_clk)
 begin
-//    if(!rst_n)
-    if(rst_n==1'b0)
-    hour_radix <= 4'b1001;
+    if(!rst_n)
+        hour_radix_clockonly <= 4'b1001;
     else if(sec_pulse)
         begin
         if(out_hour[7:4]==4'b0010)
-        hour_radix <= 4'b0011;
-        else if((out_hour[7:4]==4'b0001)||(out_hour[7:4]==4'b0000))
-        hour_radix <= 4'b1001;
+            hour_radix_clockonly <= 4'b0011;
+        else if(out_hour[7:4]==4'b0001 || out_hour[7:4]==4'b0000)
+            hour_radix_clockonly <= 4'b1001;
         end
     else
-    hour_radix <= hour_radix;
+    hour_radix_clockonly <= hour_radix_clockonly;
 end
+/* 注意下面这个只能用组合逻辑，不能添加到上面always的else if分支中
+   如果添加到上一个always的分支中，load 对 counter 置数的生效与 load 对 hour_radix （依据 data_hour 的更新）的使能是同拍的
+   counter 读取到的是沿前的旧 hour_radix ，还是根据 out_hour 判断进制，下一拍 hour_radix 才会根据 data_hour 判断进制。
+   所以当确认置数的时刻，如果clock后台走时的时间在20~23hour（个位进制：4），那么如果置数值为4~9或14~19，确认置数后，系统根据4进制，会将数字输出为3或13
+*/
+reg [3:0]   hour_radix;
+always@(load or hour_radix_clockonly or data_hour)begin
+    if(~load)
+        if(data_hour[7:4]==4'b0010)
+            hour_radix = 4'b0011;
+        else if(data_hour[7:4]==4'b0001 || data_hour[7:4]==4'b0000)
+            hour_radix = 4'b1001;
+        else
+            hour_radix = 4'b1001;
+    else
+        hour_radix = hour_radix_clockonly;
+end
+
 wire    [5:0]   RCO_zhong;
 
 //用实例化的方法组成计数器
-counter sec0(sys_clk,sec_pulse,rst_n,load,data_second[3:0],4'b1001,   1'b1,        1'b0,1'b0,out_second[3:0],RCO_zhong[0],point_out[0]),
+counter sec0(sys_clk,sec_pulse,rst_n,load,data_second[3:0],4'b1001,         1'b1,  1'b0,1'b0,out_second[3:0],RCO_zhong[0],point_out[0]),
         sec1(sys_clk,sec_pulse,rst_n,load,data_second[7:4],4'b0101,   RCO_zhong[0],1'b0,1'b0,out_second[7:4],RCO_zhong[1],point_out[1]),
         min0(sys_clk,sec_pulse,rst_n,load,data_minute[3:0],4'b1001,   RCO_zhong[1],1'b1,1'b0,out_minute[3:0],RCO_zhong[2],point_out[2]),
         min1(sys_clk,sec_pulse,rst_n,load,data_minute[7:4],4'b0101,   RCO_zhong[2],1'b0,1'b0,out_minute[7:4],RCO_zhong[3],point_out[3]),

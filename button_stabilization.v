@@ -24,7 +24,7 @@ parameter DEBOUNCE_MS = 20      // 消抖时间20ms（按实际调整）
 (
 input   wire   sys_clk,         // 系统时钟（如50MHz）
 input   wire   pulse_1ms,       // 1ms脉冲，使能信号
-input   wire   rst_n,           // 异步低电平复位
+input   wire   rst_n,           // 同步低电平复位
 input   wire   button_in,       // 按键输入（低电平按下）
 output  wire   button_out       //低电平有效
 );

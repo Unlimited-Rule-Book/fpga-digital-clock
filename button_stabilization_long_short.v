@@ -31,7 +31,7 @@ parameter LONG_PRESS_MS = 3_000   // 长按时间3秒
 (
 input   wire   sys_clk,     // 系统时钟（如50MHz）
 input   wire   pre_clk,     // PLL产生的占空比50%、1MHz的时钟，
-input   wire   rst_n,       // 异步低电平复位
+input   wire   rst_n,       // 同步低电平复位
 input   wire   button_in,   // 按键输入（低电平按下）
 
 output  reg    short_press, // 短按触发信号，低电平有效
@@ -113,8 +113,8 @@ end
 
 //短按信号计数器
 reg [$clog2(DEBOUNCE_MS)-1:0] short_counter;    // 用于拉高短按信号
-// 长按标志
-reg long_press_fired = 1'b0;
+// 长按标志，是处理数码管频闪时的产物，其实问题不在于此，即该标志的添加与否不影响正常功能，但是由于其能提高程序鲁棒性而保留，原因如下
+reg long_press_fired = 1'b0;    // 若因极端干扰使 press_counter 意外变小，标志能阻止错误地产生短按脉冲，提升了抗干扰能力
 // 按键抬起——采取跳沿检测
 reg button_debounced_prev;
 

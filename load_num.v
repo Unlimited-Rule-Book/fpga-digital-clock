@@ -4,12 +4,13 @@
 //
 // 工作流程：
 //   1. 由 clock_mode 的 mode_load_en 使能后进入工作状态，接入本模块的mode_en（这其实是短按load信号的间接作用）
+//   2. 切换到 load_num 后，显示的时间为按下 load 键时的时间，也就是说用户是用当前时刻的时间开始置数
 //   2. 用户通过 choose 键切换当前设置的位（时→分→秒→时循环）
 //   3. 用户通过 num_up/num_down 对当前位进行加减
-//   4. 用户长按 load 传入本模块的 load_confirm 后，将设定值load_*写入 data_* 输出，
+//   4. 用户长按 load 传入本模块的 load_confirm 后，将设定值 load_* (即 load_hour 等)写入 data_* 输出，
 //      由 clock_mode 传给 clock 的 counter_time 完成实际置数
 //
-// 与 clock 的区别：
+// 与 clock 的区别（counter模块的使用）：
 //   clock 中 counter 以 sec_pulse 为使能信号（每秒计一次，用于走时）
 //   load_num 中 counter 以按键脉冲（hor_pulse/min_pulse/sec_pulse）为时钟
 //   （每次按键产生一个脉冲，计数器响应该脉冲直接计一次，用于手动调整）
@@ -17,34 +18,34 @@
 //  状态机说明：
 //      1. 数码管显示控制状态机，控制空闲、LOAd显示、编辑置数三状态
 //      2. 时分秒脉冲发生状态机，在编辑置数状态下，对choose选择的时或分或秒，输入计数脉冲，并且确定时分秒闪烁显示状态机的状态
-//      3. 分秒闪烁显示状态机  ，在时分秒脉冲发生状态机的控制下，确定被选中的数位进行闪烁的逻辑
+//      3. 时分秒闪烁显示状态机  ，在时分秒脉冲发生状态机的控制下，确定被选中的数位进行闪烁的逻辑
 //
 // 子模块实例：
-//   counter（×6，同 counter_time，但以按键脉冲为时钟）
+//   counter * 6
 // =============================================================================
 module load_num
 (
 input   wire    mode_en,
 input   wire    sys_clk,
-input   wire    sec_clk,
+input   wire    sec_clk,                // 1Hz时钟，用于控制 LOAd 显示时长，控制 LOAD_EDIT 状态下，被选中的数位闪烁的逻辑
 input   wire    rst_n,
-input   wire    load_confirm,
+input   wire    load_confirm,           // 长按load的信号，在顶层与 load_l_pulse 相连接
 input   wire    choose,
 input   wire    num_up,
 input   wire    num_down,
-input   wire    [7:0]   before_second,
-input   wire    [7:0]   before_minute,
+input   wire    [7:0]   before_second,  // 将 clock 当前的时间输入到 load_num 中
+input   wire    [7:0]   before_minute,  // 切换到 load_num 后，显示的时间为按下 load 键时的时间，也就是说用户是用当前时刻的时间开始置数
 input   wire    [7:0]   before_hour,    // 在时间置数中为当前时间，在闹钟置数中为上次设定的闹钟值
 // input   wire    [5:0]   point_out,   // 小数点输出被固定，故不需要输入值
 
 
-output  reg     [7:0]   data_second,
-output  reg     [7:0]   data_minute,
-output  reg     [7:0]   data_hour,
-output  wire    [7:0]   disp_second,
-output  wire    [7:0]   disp_minute,
-output  wire    [7:0]   disp_hour  ,
-output  wire    [5:0]   point_out
+output  reg     [7:0]   data_second,    // 作用是把用户设置的数字输出到clock-counter的置数端口，完成同步置数
+output  reg     [7:0]   data_minute,    // 在顶层模块中与 clock 的 data_* 输入口连接
+output  reg     [7:0]   data_hour,      // 赋值逻辑在底部===================================================
+output  wire    [7:0]   disp_second,    // 置数模式下，数码管的显示
+output  wire    [7:0]   disp_minute,    // 涵盖 LOAd 、置数值的显示
+output  wire    [7:0]   disp_hour  ,    // 赋值逻辑在 data_* 的上方
+output  wire    [5:0]   point_out       // 既然是要控制数码管的显示，那就得加上小数点了=====================
 
 );
 
@@ -59,7 +60,7 @@ reg [1:0]   current_load = LOAD_IDLE;
 reg set_en = 1'b0;
 
 //定义SHOW状态数码管显示的字符，这些在末尾实例化seg_dymanic时才会用到
-localparam  SHOW_EMPTY = 4'd14;  //全空，与seg_dynamic中的设定有关
+localparam  SHOW_EMPTY = 4'd14;  //全空，与seg_dynamic中的设定有关，既用于“ LOAd ”左右两侧数码管的显示，也用于 LOAD_EDIT 状态下，被选中的数位闪烁的显示
 localparam  SHOW_L     = 4'd10;  //L，与seg_dynamic中的设定有关
 localparam  SHOW_O     = 4'd0 ;  //O，与seg_dynamic中的设定有关
 localparam  SHOW_A     = 4'd11;  //A，与seg_dynamic中的设定有关
@@ -201,6 +202,19 @@ begin
     else
     mode_updown = 1'b0;
 end
+// always@(posedge sys_clk)
+// begin
+    // if(~rst_n)
+        // mode_updown <= 1'b0;
+    // else if(num_up==1'b0)
+        // mode_updown <= 1'b0;
+    // else if(num_down==1'b0)
+        // mode_updown <= 1'b1;
+    // else
+        // mode_updown <= 1'b0;
+// end
+
+
 
 //定义时分秒计数脉冲状态机的状态
 localparam  SET_HOUR = 2'b00;
@@ -292,43 +306,24 @@ begin
 end
 
 
-
-//  ====================  置数到clock的逻辑  ====================
-// 在mode_en第一次使能时，“按下”load_before，将此时的时间输出到counter，进而输出到数码管
-reg mode_en_prev;// 对mode_en采用跳沿检测
-reg load_before = 1'b1;
-
-always@(posedge sys_clk)
-begin
-    if(!rst_n)
-    begin
-        mode_en_prev <= 1'b0;
-        load_before     <= 1'b1;
-            // 对mode_en跳沿检测，load_before低电平脉冲置数，ready_hour等显示按下load时的数字。
-    end
-    else begin
-        mode_en_prev <= mode_en;
-        if(mode_en_prev==1'b0 && mode_en==1'b1)
-            load_before <= 1'b0;
-        else
-            load_before <= 1'b1;
-    end
-end     
+  
 
 //  ====================  六次实例化counter，并设计加减计数的小时个位进制动态显示  ====================
 //定义进位信号中间值
 wire    [5:0]   RCO_zhong;
 //定义置数中间值
-wire [7:0]   load_hour;
-wire [7:0]   load_minute;
-wire [7:0]   load_second;
-//将中间值暂存下来
-reg  [7:0]   ready_hour = 8'b00;        // 改名：twinkle_*
-reg  [7:0]   ready_minute = 8'b00;
-reg  [7:0]   ready_second = 8'b00;
+wire [7:0]   load_hour;             // counter 模块直接输出的值
+wire [7:0]   load_minute;           // LOAD_EDIT 模式下赋值给 ready_*
+wire [7:0]   load_second;           // 确认置数时赋值给 data_*
+wire [5:0]   load_piont;
+//定义置数值显示中间值
+reg  [7:0]   ready_hour = 8'b00;    // 这些“中间值”是 LOAD_EDIT 模式下，数字的显示，经 MUX 直接连接 disp_* (即 disp_hour 等)
+reg  [7:0]   ready_minute = 8'b00;  // 受到“闪烁”逻辑的赋值，假如 hour 被选中，则 ready_hour 前半秒灭，后半秒显示 load_hour
+reg  [7:0]   ready_second = 8'b00;  // 可以考虑改名：twinkle_*
 
 //定义中间变量，设置“时”的个位的进制
-wire [3:0]   hour_radix;
+// // // wire [3:0]   hour_radix_loadonly;   // 方案一
+wire [3:0]   hour_radix;    // 方案二
 reg  [3:0]   hour_radix_up;
 reg  [3:0]   hour_radix_down;
 // 加计数进制动态显示
@@ -355,17 +350,72 @@ begin
     else
         hour_radix_down <= hour_radix_down;
 end
-assign hour_radix = mode_updown==1'b0 ? hour_radix_up : hour_radix_down;
+// // // assign hour_radix_loadonly = mode_updown==1'b0 ? hour_radix_up : hour_radix_down;   // 方案1
+assign hour_radix = mode_updown==1'b0 ? hour_radix_up : hour_radix_down;    //方案2
+
+//  =======  置数到clock的逻辑  =======
+// 在mode_en第一次使能时，“按下”load_before，将此时的时间输出到counter，进而输出到数码管。现在不是这样了，原因见下
+reg mode_en_prev;// 对mode_en采用跳沿检测。现在不是这样了，原因见下
+reg load_before = 1'b0;
+
+always@(posedge sys_clk)
+begin
+    if(!rst_n)
+    begin
+        mode_en_prev <= 1'b0;
+        load_before  <= 1'b0;
+            // 对mode_en跳沿检测，load_before低电平脉冲置数，ready_hour等显示按下load时的数字。
+    end
+    else begin
+        mode_en_prev <= mode_en;
+        // // // if(mode_en_prev==1'b0 && mode_en==1'b1) // 方案1
+        if(mode_en_prev==1'b0)  // 方案2
+            load_before <= 1'b0;// clock状态
+        else
+            load_before <= 1'b1;// load_num状态
+    end
+end   
+// load_num被置数时进制显示bug
+// 什么叫“load_num被置数”？即从clock切换到load_num时，load_before发出低电平脉冲，使load_num最初显示的数字是当前时刻的时间，也就是说load_num的counter被colck置数了
+/* 这一bug的现象是：
+   在load_num界面短按load取消置数的时刻，如果clock的后台走时在4~9或14~19hour，并且置数值为20-23（个位进制：3）（该值已经被显示出来了，但是用户由于某些原因取消了置数），
+   当用户在取消置数后，再次短按load回到置数页面（此时clock的时间还要在4~9或14~19），系统根据上次取消置数时的load_hour20~23的个位的3进制，会将load_num初始的hour显示为3或13！
+*/
+/* 所以方案1是，我们要在load_num被clock置数时，采用 before_hour 决定进制，而在置数时（ mode_en =1）回归上面的用 load_hour 决定进制
+   注意此方案只能用时序逻辑，与 clock 中的不一样！并且必须用 mode_en_prev 来判断，不可以用 mode_en !
+   因为 load_before 是在 mode_en 上跳沿时生效，如果用 mode_en 来判断用谁决定进制，那么进制决定权从 before_hour 变为 load_hour 与 load_before 在同一时钟周期改变/生效
+   而 counter 里为同步置数，即是在 load_before 生效后的下一时钟周期才置数，此时进制决定权已经归属于 load_hour 了。
+   所以这里必须延迟一个时钟周期，采用 mode_en_prev 决定进制权的归属。
+*/
+/* 当然还有方案2，就是取消对mode_en的跳沿检测，让load_before在 mode_en_prev =0时一直生效，即非load_num模式下， load_num 的counter一直在被置数，一直与load_before同步；
+   同时取消下面的方案1的进制选择机制，让 hour_radix 决定权只在 load_hour 手里。
+*/   
+/* 方案1缺点是逻辑较复杂，只用LUT资源略多
+   方案2缺点是每秒load_*一直在更新，耗电量略多
+   综合权衡后，决定使用代码更简洁的方案2，但是如果将来为了节省那一点点电，可以采取方案1，于是将方案1的代码注释掉、保留！
+   
+   这也是与进制动态显示的bug在置数模块自身的具体体现，在clock里已经有所体现了，看来进制动态显示真的挺麻烦的。
+*/
+// // // // 方案1
+// // // reg [3:0]   hour_radix;
+// // // always@(posedge sys_clk)begin
+    // // // if(!rst_n)                                                          hour_radix <= hour_radix_loadonly;
+    // // // else if(~mode_en_prev)
+        // // // if(before_hour[7:4]==4'b0010)                                   hour_radix <= 4'b0011;
+        // // // else if(before_hour[7:4]==4'b0001 || before_hour[7:4]==4'b0000) hour_radix <= 4'b1001;
+        // // // else                                                            hour_radix <= 4'b1001;
+    // // // else                                                                hour_radix <= hour_radix_loadonly;
+// // // end
 
 //实例化
-counter sec0(sys_clk,sec_pulse,rst_n,load_before,before_second[3:0],4'b1001,   1'b1        ,1'b0,mode_updown,load_second[3:0],RCO_zhong[0], ),
-        sec1(sys_clk,sec_pulse,rst_n,load_before,before_second[7:4],4'b0101,   RCO_zhong[0],1'b0,mode_updown,load_second[7:4],RCO_zhong[1], ),
+counter sec0(sys_clk,sec_pulse,rst_n,load_before,before_second[3:0],4'b1001,   1'b1        ,1'b0,mode_updown,load_second[3:0],RCO_zhong[0],load_piont[0]),
+        sec1(sys_clk,sec_pulse,rst_n,load_before,before_second[7:4],4'b0101,   RCO_zhong[0],1'b0,mode_updown,load_second[7:4],RCO_zhong[1],load_piont[1]),
              
-        min0(sys_clk,min_pulse,rst_n,load_before,before_minute[3:0],4'b1001,   1'b1        ,1'b1,mode_updown,load_minute[3:0],RCO_zhong[2], ),
-        min1(sys_clk,min_pulse,rst_n,load_before,before_minute[7:4],4'b0101,   RCO_zhong[2],1'b0,mode_updown,load_minute[7:4],RCO_zhong[3], ),
+        min0(sys_clk,min_pulse,rst_n,load_before,before_minute[3:0],4'b1001,   1'b1        ,1'b1,mode_updown,load_minute[3:0],RCO_zhong[2],load_piont[2]),
+        min1(sys_clk,min_pulse,rst_n,load_before,before_minute[7:4],4'b0101,   RCO_zhong[2],1'b0,mode_updown,load_minute[7:4],RCO_zhong[3],load_piont[3]),
              
-        hor0(sys_clk,hor_pulse,rst_n,load_before,before_hour[3:0],  hour_radix,1'b1        ,1'b1,mode_updown,load_hour[3:0],  RCO_zhong[4], ),
-        hor1(sys_clk,hor_pulse,rst_n,load_before,before_hour[7:4],  4'b0010,   RCO_zhong[4],1'b0,mode_updown,load_hour[7:4],  RCO_zhong[5], );
+        hor0(sys_clk,hor_pulse,rst_n,load_before,before_hour[3:0],  hour_radix,1'b1        ,1'b1,mode_updown,load_hour[3:0],  RCO_zhong[4],load_piont[4]),
+        hor1(sys_clk,hor_pulse,rst_n,load_before,before_hour[7:4],  4'b0010,   RCO_zhong[4],1'b0,mode_updown,load_hour[7:4],  RCO_zhong[5],load_piont[5]);
 // 注：从右往左数第1个数字代表着counter的point_in输入口，此端口其实不需要输入，但是未用的输入端口则必须提供一个确定的值
 // 而最右侧的输出端口point_out_counter也不需要，就暂时悬空
 
@@ -387,24 +437,24 @@ else begin
         TWINKLE_HOUR:
         begin
             ready_minute <= load_minute; ready_second <= load_second;
-            if(sec_clk)         ready_hour <= {4'd14,4'd14};
+            if(sec_clk)         ready_hour <= {SHOW_EMPTY,SHOW_EMPTY};
             else if(~sec_clk)   ready_hour <= load_hour; // sec_clk高电平时输出正常数字，低电平时传入31，即全灭
         end
         TWINKLE_MINUTE:
         begin
             ready_hour <= load_hour; ready_second <= load_second;
-            if(sec_clk)         ready_minute <= {4'd14,4'd14};
+            if(sec_clk)         ready_minute <= {SHOW_EMPTY,SHOW_EMPTY};
             else if(~sec_clk)   ready_minute <= load_minute; // sec_clk高电平时输出正常数字，低电平时传入31，即全灭
         end
         TWINKLE_SECOND:
         begin
             ready_hour <= load_hour; ready_minute <= load_minute;
-            if(sec_clk)         ready_second <= {4'd14,4'd14};
+            if(sec_clk)         ready_second <= {SHOW_EMPTY,SHOW_EMPTY};
             else if(~sec_clk)   ready_second <= load_second; // sec_clk高电平时输出正常数字，低电平时传入31，即全灭    
         end
         default: begin  // 与TWINKLE_HOUR相同
             ready_minute <= load_minute; ready_second <= load_second;
-            if(sec_clk)         ready_hour <= {4'd14,4'd14};
+            if(sec_clk)         ready_hour <= {SHOW_EMPTY,SHOW_EMPTY};
             else if(~sec_clk)   ready_hour <= load_hour;
         end
     endcase
@@ -421,7 +471,7 @@ assign  disp_minute = (mode_en && current_load==LOAD_SHOW) ? {SHOW_O, SHOW_A}   
 assign  disp_second = (mode_en && current_load==LOAD_SHOW) ? {SHOW_d, SHOW_EMPTY} : 
                       (mode_en && current_load==LOAD_EDIT) ? ready_second         :
                       8'hFF;                 
-assign point_out = 6'b010100;
+assign point_out = load_piont;
 
 
 
@@ -430,7 +480,7 @@ always@(posedge sys_clk)
 begin
     if(!rst_n)
     begin
-        data_hour   <= before_hour;
+        data_hour   <= before_hour  ;
         data_minute <= before_minute;
         data_second <= before_second;
     end
@@ -441,12 +491,11 @@ begin
             data_minute <= load_minute;
             data_second <= load_second;
         end
-        else
-        begin
-            data_hour   <= data_hour  ;
-            data_minute <= data_minute;
-            data_second <= data_second;
-        end
+    end
+    else begin
+        data_hour   <= before_hour  ;
+        data_minute <= before_minute;
+        data_second <= before_second;
     end
 end
 

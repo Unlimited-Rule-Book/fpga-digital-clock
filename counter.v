@@ -15,7 +15,7 @@ module counter
 (      
 input   wire    sys_clk,            // 系统时钟
 input   wire    sec_pulse,          // 周期为1second的脉冲，脉宽与系统时钟相等
-input   wire    rst_n,              // 异步清零，低电平有效，长按按键至少1秒复位
+input   wire    rst_n,              // 同步清零，低电平有效，长按按键至少1秒复位
 input   wire    load,               // 同步置数，下降沿有效
 input   wire    [3:0]   data_counter,  
 input   wire    [3:0]   data_radix, // 计数器在计到哪一个数时同步清零，如十进制传入9，六进制传入5
@@ -31,9 +31,9 @@ wire    RCO_add;        // 定义进位信号中间变量，可增强可读性�
 wire    RCO_subtract;   // 定义借位信号中间变量，可增强可读性，若为提高执行效率，则可去掉
 
 always@(posedge sys_clk)begin
-    if(~rst_n)              // 异步清零，优先级高于计数
+    if(~rst_n)              // 同步清零，优先级高于计数
         out_counter <= 0;
-    else if(~load)          // 原本想采用异步置数，但是系统只支持异步清零
+    else if(~load)          // 原本想采用异步置数，但是系统只支持异步清零。后来因为PLL锁定信号需要与I/O口输入的复位信号一同控制复位，最终改为同步清零（同步复位）
         out_counter <= (data_counter > data_radix) ? data_radix : data_counter; 
         // 防止非法装载大于最大进制的值，下方RCO_add就可以从out_counter >= data_radix改成out_counter == data_radix
         // 现在的逻辑是，装载非法值后，输出进制值data_radix，也可以想之前一样，装载非法值后，输出0。

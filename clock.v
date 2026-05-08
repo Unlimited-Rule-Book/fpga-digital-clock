@@ -80,7 +80,7 @@ end
 wire    [5:0]   RCO_zhong;
 
 //用实例化的方法组成计数器
-counter sec0(sys_clk,sec_pulse,rst_n,load,data_second[3:0],4'b1001,         1'b1,  1'b0,1'b0,out_second[3:0],RCO_zhong[0],point_out[0]),
+counter sec0(sys_clk,sec_pulse,rst_n,load,data_second[3:0],4'b1001,          1'b1, 1'b0,1'b0,out_second[3:0],RCO_zhong[0],point_out[0]),
         sec1(sys_clk,sec_pulse,rst_n,load,data_second[7:4],4'b0101,   RCO_zhong[0],1'b0,1'b0,out_second[7:4],RCO_zhong[1],point_out[1]),
         min0(sys_clk,sec_pulse,rst_n,load,data_minute[3:0],4'b1001,   RCO_zhong[1],1'b1,1'b0,out_minute[3:0],RCO_zhong[2],point_out[2]),
         min1(sys_clk,sec_pulse,rst_n,load,data_minute[7:4],4'b0101,   RCO_zhong[2],1'b0,1'b0,out_minute[7:4],RCO_zhong[3],point_out[3]),

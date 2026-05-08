@@ -56,7 +56,7 @@ always @(posedge pre_clk) begin
             pre_ms_cnt  <= 0;
             pre_ms_flag <= ~pre_ms_flag;   // 每满 1ms 翻转一次
         end else
-            pre_ms_cnt <= pre_ms_cnt + 1;
+            pre_ms_cnt <= pre_ms_cnt + 1'b1;
     end
 end
 // sys_clk 域：三级同步 + XOR 边沿检测
@@ -103,7 +103,7 @@ always @(posedge sys_clk) begin
                debounce_counter <= 0;
            end
            else if (pulse_1ms)
-               debounce_counter <= debounce_counter + 1;
+               debounce_counter <= debounce_counter + 1'b1;
         end
         else 
             debounce_counter <= 0;
@@ -133,11 +133,11 @@ always @(posedge sys_clk) begin
         if (button_debounced==1'b0)begin    // 按键按下（低电平）
             short_counter <= 5'd0;   // 每次按下时清零short_counter，防止上次残留值影响本次短按脉冲宽度
             if (press_counter < SHORT_END_CNT_MAX)begin
-                if (pulse_1ms)press_counter <= press_counter + 1;
+                if (pulse_1ms)press_counter <= press_counter + 1'b1;
                 short_press <= 1'b1;     // 未达到0.5秒，且按键未抬起，不触发短按长按
             end
             else if(press_counter >= SHORT_END_CNT_MAX && press_counter < LONG_PRESS_CNT_MAX)begin
-                if (pulse_1ms) press_counter <= press_counter + 1;
+                if (pulse_1ms) press_counter <= press_counter + 1'b1;
                 short_press <= 1'b1;      // 达到0.5秒，不是短按信号,可能为长按信号，继续计时
             end
             else if(press_counter >= LONG_PRESS_CNT_MAX)begin
@@ -147,7 +147,7 @@ always @(posedge sys_clk) begin
                 long_press_fired <= 1'b1; // 拉高长按标志
             end
             else begin
-                if (pulse_1ms) press_counter <= press_counter + 1;
+                if (pulse_1ms) press_counter <= press_counter + 1'b1;
                 short_press <= 1'b1;
                 long_press <= 1'b1;    
             end

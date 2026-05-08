@@ -36,12 +36,15 @@ module sys_divider #(
     // ----------------------------------------------------------------
     //  pre_clk 域：计数 + toggle flag + sec_clk 生成
     // ----------------------------------------------------------------
-    localparam FULL_CNT = CLK_FREQ - 1;     // 999_999，计满1秒
-    localparam HALF_CNT = CLK_FREQ / 2 - 1; // 499_999，半秒翻转点
-    localparam _1MS_CNT = 1_000 - 1;
+    localparam _1MS_CNT = 1_000;                            // 1us计到1ms，共计1000个数
+    localparam _1MS_MAX = _1MS_CNT - 1;                     // 最大计数值999
+    localparam _1S_FULL_CNT = CLK_FREQ / _1MS_CNT;          // 每1ms自增1，共计1000个数，计满1秒
+    localparam _1S_FULL_MAX = _1S_FULL_CNT - 1;             // 最大计数值999
+    localparam _1S_HALF_MAX = CLK_FREQ / _1MS_CNT / 2 - 1;  // 最大计数值499，半秒翻转点
+
     
-    reg [$clog2(_1MS_CNT)-1:0]          ms_cnt;     // 10位1毫秒（秒低位）计数器
-    reg [$clog2(CLK_FREQ/_1MS_CNT)-1:0] sec_cnt;    // 10位1秒（秒高位）计数器
+    reg [$clog2(_1MS_CNT)-1:0]      ms_cnt;     // 10位1毫秒（秒低位）计数器
+    reg [$clog2(_1S_FULL_CNT)-1:0]  sec_cnt;    // 10位1秒（秒高位）计数器
  // 两个10位计数器级联，输出两个flag信号，一共20位计数器相比50MHz的27位节省7个FF   
     reg ms_flag;        // 每毫秒 翻转 一次，用于跨时钟域传递
     reg sec_flag;       // 每秒 toggle 一次，用于跨时钟域传递
@@ -53,26 +56,24 @@ module sys_divider #(
             ms_flag  <= 1'b0;
             sec_flag <= 1'b0;
             sec_clk  <= 1'b1;   // 初值与原 divider 一致，为高电平
-        end else begin
-            if({sec_cnt,ms_cnt} == FULL_CNT) begin
-                sec_cnt  <= 0;
-                ms_cnt   <= 0;
-                sec_flag <= ~sec_flag;  // 每满1秒toggle，传递给sys_clk域
-                sec_clk  <= ~sec_clk;   // 整秒翻转(第二次)            
-            end else begin
-                if ({sec_cnt,ms_cnt} == HALF_CNT) 
-                    sec_clk <= ~sec_clk;    // 半秒翻转(第一次)实现50%占空比
-                if (ms_cnt == _1MS_CNT) begin                
-                    ms_flag <= ~ms_flag;    // 每满1毫秒toggle，传递给sys_clk域
-                    sec_cnt <= sec_cnt + 1;
-                    ms_cnt  <= 0;
+        end 
+        else begin
+            if(ms_cnt == _1MS_MAX) begin
+                ms_cnt <= 0;
+                ms_flag <= ~ms_flag;            // 每满1毫秒toggle，传递给sys_clk域
+                if(sec_cnt == _1S_FULL_MAX) begin
+                    sec_cnt <= 0;
+                    sec_flag <= ~sec_flag;      // 每满1秒toggle，传递给sys_clk域
+                    sec_clk  <= ~sec_clk;       // 整秒翻转(第二次) 
                 end
                 else begin
-                    ms_cnt <= ms_cnt + 1;
-                    ms_flag <= ms_flag;
-                    sec_cnt <= sec_cnt;
+                    if(sec_cnt==_1S_HALF_MAX)
+                        sec_clk <= ~sec_clk;    // 半秒翻转(第一次)实现50%占空比
+                    sec_cnt <= sec_cnt + 1'b1;  // 在 if(ms_cnt == _1MS_MAX) 分支下加计数，所以加到1秒仅需1000个数
                 end
             end
+            else 
+                ms_cnt <= ms_cnt + 1'b1;
         end
     end
     

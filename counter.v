@@ -44,9 +44,9 @@ always@(posedge sys_clk)begin
         else if(RCO==1'b1     &&mode==1'b1)
             out_counter <= data_radix;
         else if(RCO_last==1'b1&&mode==1'b0)
-            out_counter <= out_counter + 1; //当前一位有进位信号时，计数
+            out_counter <= out_counter + 1'b1;  //当前一位有进位信号时，计数
         else if(RCO_last==1'b1&&mode==1'b1)
-            out_counter <= out_counter - 1;
+            out_counter <= out_counter - 1'b1;
     end
         
     else

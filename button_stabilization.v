@@ -58,7 +58,7 @@ always @(posedge sys_clk) begin
                     debounce_counter <= 0;
                 end
                 else 
-                    debounce_counter <= debounce_counter + 1;
+                    debounce_counter <= debounce_counter + 1'b1;
             end
         end
         else 

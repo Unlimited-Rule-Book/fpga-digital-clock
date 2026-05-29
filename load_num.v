@@ -66,7 +66,7 @@ localparam  SHOW_O     = 4'd0 ;  //O，与seg_dynamic中的设定有关
 localparam  SHOW_A     = 4'd11;  //A，与seg_dynamic中的设定有关
 localparam  SHOW_d     = 4'd12;  //d，与seg_dynamic中的设定有关
 
-//记录sec_clk在上一系统时钟周期的只，用于判断sec_clk的跳沿
+//记录sec_clk在上一系统时钟周期的值，用于判断sec_clk的跳沿
 reg sec_clk_prev = 1'b1;
 // 这里并没有把sec_clk_prev <= sec_clk放在状态机内，
 // 是因为若将sec_clk_prev的更新放在状态机的LOAD_SHOW状态内，就切断了它在其他状态下的跟踪，
@@ -323,7 +323,8 @@ reg  [7:0]   ready_second = 8'b00;  // 可以考虑改名：twinkle_*
 
 //定义中间变量，设置“时”的个位的进制
 // // // wire [3:0]   hour_radix_loadonly;   // 方案一
-wire [3:0]   hour_radix;    // 方案二
+// wire [3:0]   hour_radix;    // 方案二
+reg  [3:0]   hour_radix;
 reg  [3:0]   hour_radix_up;
 reg  [3:0]   hour_radix_down;
 // 加计数进制动态显示
@@ -343,15 +344,26 @@ always@(posedge sys_clk)
 begin
     if(!rst_n)
         hour_radix_down <= 4'b1001;
-    else if(mode_updown==1'b1 && load_hour[7:4]==4'b0000)
-        hour_radix_down <= 4'b0011;
-    else if(mode_updown==1'b1 && (load_hour[7:4]==4'b0001 || load_hour[7:4]==4'b0010))
+    else if(mode_updown==1'b1 && (load_hour==8'b0000_0000                            || load_hour[7:4]==4'b0010) && load_hour!=8'b0010_0000)    
+        hour_radix_down <= 4'b0011;                                                     //十位为2时，除了20，其余个位均为3进制
+    else if(mode_updown==1'b1 && (load_hour[7:4]==4'b0000 || load_hour[7:4]==4'b0001 || load_hour==8'b0010_0000) && load_hour!=8'b0000_0000)
         hour_radix_down <= 4'b1001;
     else
         hour_radix_down <= hour_radix_down;
 end
 // // // assign hour_radix_loadonly = mode_updown==1'b0 ? hour_radix_up : hour_radix_down;   // 方案1
-assign hour_radix = mode_updown==1'b0 ? hour_radix_up : hour_radix_down;    //方案2
+// assign hour_radix = mode_updown==1'b0 ? hour_radix_up : hour_radix_down;    //方案2
+always@(posedge sys_clk)
+begin
+    if(~rst_n)
+        hour_radix <= hour_radix_up;
+    else if(~num_up_pulse)
+        hour_radix <= hour_radix_up;
+    else if(~num_down_pulse)
+        hour_radix <= hour_radix_down;
+    else
+        hour_radix <= hour_radix;
+end
 
 //  =======  置数到clock的逻辑  =======
 // 在mode_en第一次使能时，“按下”load_before，将此时的时间输出到counter，进而输出到数码管。现在不是这样了，原因见下

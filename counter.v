@@ -38,8 +38,11 @@ always@(posedge sys_clk)begin
         // 防止非法装载大于最大进制的值，下方RCO_add就可以从out_counter >= data_radix改成out_counter == data_radix
         // 现在的逻辑是，装载非法值后，输出进制值data_radix，也可以想之前一样，装载非法值后，输出0。
 
+    else if(out_counter > data_radix)
+        out_counter <= data_radix;
+
     else if(sec_pulse)begin
-        if(RCO==1'b1     &&mode==1'b0)
+        if     (RCO==1'b1     &&mode==1'b0)
             out_counter <= 0;
         else if(RCO==1'b1     &&mode==1'b1)
             out_counter <= data_radix;

@@ -31,6 +31,7 @@ input   wire    [7:0]   out_second,
 input   wire    [7:0]   out_minute,
 input   wire    [7:0]   out_hour,
 input   wire    [5:0]   point_out,
+input   wire    point_out_twinkle_en,
 
 output  reg     [5:0]   sel = 6'b11_1111,   // 数码管位选信号，初值为选中所有数码管
 output  reg     [7:0]   seg = 8'b0          // 数码管段选信号，初值为点亮数码管的所有段
@@ -38,10 +39,10 @@ output  reg     [7:0]   seg = 8'b0          // 数码管段选信号，初值为
 
 //  ====================  参数声明  ====================
 // 两级同步器 + 边沿检测XOR，生成数码管显示的使能信号seg_flag
-parameter   CNT_MS = 1000;
+parameter   MS_TOP = 1000;
 // 期望数码管以1ms为周期进行扫描，待分频时钟1mhz计1000个数后反转，生成的seg_toggle是2ms为周期的。
 // seg_toggle进入同步逻辑，每次反转都会生成seg_flag脉冲，为1ms脉冲，刷新数码管的时钟的电平
-localparam  CNT_MAX = CNT_MS - 1'b1;
+localparam  CNT_MAX = MS_TOP - 1'b1;
 
 //  ====================  定义中间变量  ====================
 //定义中间变量——数码管刷新时钟
@@ -53,8 +54,6 @@ reg     seg_toggle_s1,  seg_toggle_s2,  seg_toggle_s3;
 reg     [2:0]   cnt_sel = 3'b0;         // 位选信号计数器
 reg     [3:0]   data_disp = 4'b0;       // 为了避免case语句嵌套，增强可读性，定义此变量位段选信号生成的中间变量，此变量不包含小数点
 //定义锁存器——存储sec_clk在seg_clk的上一周期的值
-reg     sec_clk_prev = 1'b1;
-reg     point_en   = 1'b1;              // 为了实现小数点以1s为周期闪烁而定义数码管使能信号
 reg     point_disp = 1'b0;              // 当前数码管显示的小数点
 
 //  ====================  主程序  ====================
@@ -120,35 +119,33 @@ begin
 end
 
 //数码管数据显示，小数点以1s为周期闪烁
-always@(posedge sys_clk)
-begin
-    if(~rst_n)
-        point_en <= 1'b1;
-    else if(sec_clk != sec_clk_prev)
-        point_en <= ~point_en;
-    else
-        point_en <= point_en;
-end
-//但是sec_clk为边沿触发而非电平触发，
-//所以需要定义锁存器sec_clk_prev记录sec_clk上一时刻的状态
-always@(posedge sys_clk)
-begin
-    if(~rst_n)
-        sec_clk_prev <= 1'b1;
-    else
-        sec_clk_prev <= sec_clk;
-end
+// // // always@(posedge sys_clk)
+// // // begin
+    // // // if(~rst_n)
+        // // // point_en <= 1'b1;
+    // // // else if(sec_clk != sec_clk_prev)
+        // // // point_en <= ~point_en;
+    // // // else
+        // // // point_en <= point_en;
+// // // end
+// // // //但是sec_clk为边沿触发而非电平触发，
+// // // //所以需要定义锁存器sec_clk_prev记录sec_clk上一时刻的状态
+// // // always@(posedge sys_clk)
+// // // begin
+    // // // if(~rst_n)
+        // // // sec_clk_prev <= 1'b1;
+    // // // else
+        // // // sec_clk_prev <= sec_clk;
+// // // end
 //point_disp:为了增强可读性，也为了使对小数点的操作更加灵活，设置小数点寄存器，低电平点亮，所以需要对输入信号取反
 always@(posedge sys_clk)
 begin
     if(~rst_n)
-        point_disp <= 1'b0;
-    else if(point_en==1'b1 && seg_flag)
-        point_disp <= ~point_out[cnt_sel];
-    else if(point_en==1'b0 && seg_flag)
-        point_disp <= 1'b1;
-    else if(seg_flag)
-        point_disp <= point_disp;
+        point_disp <= 1'b1; // 默认小数点熄灭
+    else if(~point_out_twinkle_en            && seg_flag)    point_disp <= ~point_out[cnt_sel];
+    else if(point_out_twinkle_en && sec_clk  && seg_flag)    point_disp <= ~point_out[cnt_sel];
+    else if(point_out_twinkle_en && ~sec_clk && seg_flag)    point_disp <= 1'b1;
+    else                                                     point_disp <= point_disp;
 end
 
 //seg:控制数码管段选信号，低电平点亮数码管
@@ -158,7 +155,7 @@ end
 always@(*)
 begin
     if(~rst_n)
-        seg <=  8'b0;                               //复位：全显示
+        seg =  8'b0;                               //复位：全显示
     else
         begin
         case(data_disp)
@@ -175,22 +172,26 @@ begin
         4'd10:  seg =   {point_disp,7'b100_0111};   //显示数字L
         4'd11:  seg =   {point_disp,7'b000_1000};   //显示数字A
         4'd12:  seg =   {point_disp,7'b010_0001};   //显示数字d
-        4'd13:  seg =   {point_disp,7'b100_0110};   //显示数字C
+        4'd13:  seg =   {point_disp,7'b000_0110};   //显示数字E
         4'd14:  seg =   {point_disp,7'b111_1111};   //全灭
-        4'd15:  seg =   8'b0;                       //全显示
+        4'd15:  seg =   {point_disp,7'b011_1111};   //显示负号  // 依照现在alarm中小时个位加计数进制的逻辑，“负号”的编码必须是F，编码必须是4位，使得加计数能够溢出清零！
+        // 4'd15:  seg =   8'b1011_1111;   //显示负号
+
+
+        // 4'd15:  seg =   8'b0;                       //全显示
         
         // 请看上方对data_disp复制的case语句，这种逻辑下，disp最大只能是4位宽，无法被赋予15以上的值！！
         // 所以只能根据现有的需求，将需要的编码，不需要的只能舍弃
         // data_disp也没必要定义成5位宽的了
         // 5'd11:  seg =   {point_disp,7'b000_0011};   //显示数字B       
-        // 5'd14:  seg =   {point_disp,7'b000_0110};   //显示数字E
+        // 5'd12:  seg =   {point_disp,7'b100_0110};   //显示数字C
         // 5'd15:  seg =   {point_disp,7'b000_1110};   //显示数字F
                                                     //数字G无法显示  
         // 5'd16:  seg =   {point_disp,7'b000_1001};   //显示数字H
                                                     //数字I无法显示
                                                     //数字J无法显示
                                                     //数字K无法显示
-//        5'd16:  seg =   8'b1011_1111;               //显示负号
+
 
         default:seg =   8'b1;                       //异常：全不显示
         endcase

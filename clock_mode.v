@@ -52,7 +52,7 @@ input   wire    choose,
 input   wire    num_up,
 input   wire    num_down,
 
-output  reg     light,
+output  wire    beep,
 
 output  wire    stcp,
 output  wire    shcp,
@@ -551,15 +551,24 @@ begin
     else if(pulse_1s && counter_60 > 0)
         counter_60 <= counter_60 + 1'b1;
 end
+reg beep_en;
 always@(posedge sys_clk)
 begin
     if(!rst_n)
-        light <= 1'b1;
+        beep_en <= 1'b0;
     else if(counter_60 > 0)
-        light <= 1'b0;
+        beep_en <= 1'b1;
     else
-        light <= 1'b1;
+        beep_en <= 1'b0;
 end
+beep_song clock_mode_beep_song
+(
+    .sys_clk    (sys_clk),
+    .rst_n      (rst_n),
+    .beep_en    (beep_en),
+
+    .beep       (beep)
+);
 
 
 

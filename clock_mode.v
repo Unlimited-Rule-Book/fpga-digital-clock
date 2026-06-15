@@ -273,6 +273,9 @@ localparam COUNTER_16S_COUNT = COUNTER_16S_TIME - 1;      // 16秒计数值
 reg [2:0]   button_prev=3'b111;      //记录输入信号之前的值（num_up、num_down、choose），按系统时钟更新
 wire[2:0]   button_now;
 assign      button_now={choose_bs,num_up_bs,num_down_bs};//现在的值，实时更新
+always@(posedge sys_clk) button_prev <= {choose_bs,num_up_bs,num_down_bs};
+//检测按键变化的功能在后面也有作用：用于将闹钟关掉
+
 // alarm 在 ALARM_VIEW 状态下，短按 load ，才切换回时钟模式
 wire    alarm_view_en;
 
@@ -282,7 +285,6 @@ begin
     if(!rst_n)begin
         MODE <= MODE_CLOCK;
         counter_16s <= 0;
-        button_prev <= 3'b111;
         // 使能控制
         mode_load_en <= 1'b0;
         mode_alarm_en <= 1'b0;
@@ -363,7 +365,6 @@ begin
             disp_point  <= disp_piont_num ;
             disp_point_twinkle_en <= 1'b1;
             // 模式切换
-            button_prev <= {choose_bs,num_up_bs,num_down_bs};
             if(load_s_pulse==1'b0&&load_l_pulse==1'b1)begin//load短按，切换为闹钟模式
                     counter_16s <= 0;
                     MODE <= MODE_ALARM;
@@ -538,29 +539,32 @@ alarm       clock_mode_alarm
     .alarm_ring_en  (alarm_ring_en      )
 );
 
-reg [5:0]   counter_60;
-parameter   CNT_60 = 6'd60;
+parameter   CNT_BEEP = 7'd90;   // 闹钟响90秒
+reg [$clog2(CNT_BEEP)-1:0]   counter_beep;
 always@(posedge sys_clk)
 begin
     if(!rst_n)
-        counter_60 <= 0;
+        counter_beep <= 0;
+    else if(button_now != button_prev)  // 按任意按键暂停闹钟
+        counter_beep <= 0;
     else if(pulse_1s && alarm_ring_en)
-        counter_60 <= counter_60 + 1'b1;
-    else if(pulse_1s && (counter_60 == CNT_60 - 1) )
-        counter_60 <= 0;
-    else if(pulse_1s && counter_60 > 0)
-        counter_60 <= counter_60 + 1'b1;
+        counter_beep <= counter_beep + 1'b1;
+    else if(pulse_1s && (counter_beep == CNT_BEEP - 1'b1) )
+        counter_beep <= 0;
+    else if(pulse_1s && counter_beep > 0)
+        counter_beep <= counter_beep + 1'b1;
 end
 reg beep_en;
 always@(posedge sys_clk)
 begin
     if(!rst_n)
         beep_en <= 1'b0;
-    else if(counter_60 > 0)
+    else if(counter_beep > 0)
         beep_en <= 1'b1;
     else
         beep_en <= 1'b0;
 end
+
 beep_song clock_mode_beep_song
 (
     .sys_clk    (sys_clk),

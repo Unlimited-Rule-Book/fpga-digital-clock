@@ -4,19 +4,6 @@ input   sys_clk,
 input   rst_n,
 input   beep_en,
 
-
-
-// // // output  reg  [7:0]   rd_addr,
-// // // output  wire [11:0]  rd_data,
- 
-// // // output  wire [$clog2(CNT_T1P_MAX*8)-1:0]  cnt_dur_max,
-// // // output  reg  [$clog2(CNT_T1P_MAX*8)-1:0]  cnt_dur,
-
-// // // output  reg  [27:0]  freq_data,
-// // // output  reg  [26:0]  duty_data,
-
-// // // output  reg  [27:0]  freq_cnt,
-
 output  reg beep
 );
 
@@ -87,7 +74,9 @@ begin
         cnt_dur <= 0;
     else if(beep_en)
         cnt_dur <= cnt_dur + 1'b1;
-        // beep_en 中途不使能，然后再使能时，会接着上次播放
+        // 如果不加下面的这条语句，那么效果是 beep_en 中途不使能，然后再使能时，会接着上次播放
+    else if(!beep_en)
+        cnt_dur <= 0;
 end
 
 
@@ -100,9 +89,9 @@ begin   // 暂定为 beep_en 使能不断就一直播放
         rd_addr <= 0;
     else if(cnt_dur==cnt_dur_max && beep_en)
         rd_addr <= rd_addr+1'b1;
-    else
-        rd_addr <= rd_addr;
-        // beep_en 中途不使能，然后再使能时，会接着上次播放
+        // 如果不加下面的这条语句，那么效果是 beep_en 中途不使能，然后再使能时，会接着上次播放
+    else if(!beep_en)
+        rd_addr <= 0;
 end
 // 内容读取
 // 应该在实例化RAM-IP核时，RAM的输出之一就是内容
@@ -116,7 +105,8 @@ my_ram beep_song_my_ram
 
 	.q      (rd_data)
 );
-
+// my_ram 中 init_file ，就是保存乐谱的 .mif 文件的位置
+// 如果填写相对路径的话，相对路径不是相对 my_ram.v 的路径，而是相对主工程 .qpf 文件而言的
 
 
 
@@ -179,6 +169,9 @@ begin
         freq_cnt <= 0;
     else if(beep_en)
         freq_cnt <= freq_cnt + 1'b1;
+        // 如果不加下面的这条语句，那么效果是 beep_en 中途不使能，然后再使能时，会接着上次播放
+    else if(!beep_en)
+        freq_cnt <= 0;
 end
 always@(posedge sys_clk)
 begin
@@ -191,49 +184,5 @@ begin
     else if(freq_cnt==0)
         beep <= 1'b0;
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// // // // 每半秒换一个音符
-// // // parameter   CLK = 50_000_000;
-// // // parameter   CNT_MAX = CLK/2 - 1'b1;
-// // // reg [$clog2(CNT_MAX)-1:0]  cnt_500ms;
-// // // always@(posedge sys_clk)
-// // // begin
-    // // // if(~rst_n)
-        // // // cnt_500ms <= 0;
-    // // // else if(cnt_500ms==CNT_MAX)
-        // // // cnt_500ms <= 0;
-    // // // else if(beep_en)
-        // // // cnt_500ms <= cnt_500ms + 1'b1;
-// // // end
-
-// // // // 轮到哪一个音符发音？
-// // // parameter   CNT_NUM_MAX = 6;
-// // // reg [$clog2(CNT_NUM_MAX)-1:0]   cnt_num;
-// // // always@(posedge sys_clk)
-// // // begin
-    // // // if(~rst_n)
-        // // // cnt_num <= 0;
-    // // // else if(cnt_num==CNT_NUM_MAX && cnt_500ms==CNT_MAX)
-        // // // cnt_num <= 0;
-    // // // else if(cnt_500ms==CNT_MAX && beep_en)
-        // // // cnt_num <= cnt_num + 1'b1;
-// // // end
-
-
-
-
 
 endmodule

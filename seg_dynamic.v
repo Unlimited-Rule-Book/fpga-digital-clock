@@ -193,7 +193,7 @@ begin
                                                     //数字K无法显示
 
 
-        default:seg =   8'b1;                       //异常：全不显示
+        default:seg =   {8{1'b1}};                       //异常：全不显示
         endcase
         end
 end

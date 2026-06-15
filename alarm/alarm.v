@@ -452,7 +452,7 @@ else begin
         default: begin  // 与TWINKLE_STATE相同
             ready_hour <= edit_hour; ready_minute <= edit_minute;
             if(sec_clk)         ready_state <= {alarm_num_bcd,SHOW_EMPTY};
-            else if(~sec_clk)   ready_state <= edit_hour;
+            else if(~sec_clk)   ready_state <= ready_state_show;
         end
     endcase
 end

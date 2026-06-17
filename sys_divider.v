@@ -9,7 +9,7 @@
 //               → 用途：按键消抖计数使能、模式超时计数（counter_16s）使能
 //   pulse_1s  : 每1s输出一个宽度为1个sys_clk周期（20ns）的高脉冲
 //               → 用途：驱动 counter_time 走时
-//   sec_clk   : 1Hz，50%占空比时钟（注：视觉信号，未作CDC处理，约有60ns固有延迟）
+//   sec_clk   : 1Hz，50%占空比时钟
 //               → 用途：seg_dynamic 小数点闪烁
 //
 // CDC方案：toggle-flag + 三级同步寄存器 + XOR边沿检测
@@ -38,13 +38,13 @@ module sys_divider #(
     // ----------------------------------------------------------------
     localparam _1MS_CNT = 1_000;                            // 1us计到1ms，共计1000个数
     localparam _1MS_MAX = _1MS_CNT - 1;                     // 最大计数值999
-    localparam _1S_FULL_CNT = CLK_FREQ / _1MS_CNT;          // 每1ms自增1，共计1000个数，计满1秒
-    localparam _1S_FULL_MAX = _1S_FULL_CNT - 1;             // 最大计数值999
+    // localparam _1S_FULL_CNT = CLK_FREQ / _1MS_CNT;          // 每1ms自增1，共计1000个数，计满1秒
+    // localparam _1S_FULL_MAX = _1S_FULL_CNT - 1;             // 最大计数值999
     localparam _1S_HALF_MAX = CLK_FREQ / _1MS_CNT / 2 - 1;  // 最大计数值499，半秒翻转点
 
     
     reg [$clog2(_1MS_CNT)-1:0]      ms_cnt;     // 10位1毫秒（秒低位）计数器
-    reg [$clog2(_1S_FULL_CNT)-1:0]  sec_cnt;    // 10位1秒（秒高位）计数器
+    reg [$clog2(_1S_HALF_MAX)-1:0]  sec_cnt;    // 10位1秒（秒高位）计数器
  // 两个10位计数器级联，输出两个flag信号，一共20位计数器相比50MHz的27位节省7个FF   
     reg ms_flag;        // 每毫秒 翻转 一次，用于跨时钟域传递
     reg sec_flag;       // 每秒 toggle 一次，用于跨时钟域传递
@@ -55,21 +55,17 @@ module sys_divider #(
             ms_cnt   <= 0;
             ms_flag  <= 1'b0;
             sec_flag <= 1'b0;
-            sec_clk  <= 1'b1;   // 初值与原 divider 一致，为高电平
         end 
         else begin
             if(ms_cnt == _1MS_MAX) begin
                 ms_cnt <= 0;
                 ms_flag <= ~ms_flag;            // 每满1毫秒toggle，传递给sys_clk域
-                if(sec_cnt == _1S_FULL_MAX) begin
+                if(sec_cnt == _1S_HALF_MAX) begin
                     sec_cnt <= 0;
-                    sec_flag <= ~sec_flag;      // 每满1秒toggle，传递给sys_clk域
-                    sec_clk  <= ~sec_clk;       // 整秒翻转(第二次) 
+                    sec_flag <= ~sec_flag;      // 每满0.5秒toggle，传递给sys_clk域，实现 50% 占空比 1Hz 时钟信号
                 end
                 else begin
-                    if(sec_cnt==_1S_HALF_MAX)
-                        sec_clk <= ~sec_clk;    // 半秒翻转(第一次)实现50%占空比
-                    sec_cnt <= sec_cnt + 1'b1;  // 在 if(ms_cnt == _1MS_MAX) 分支下加计数，所以加到1秒仅需1000个数
+                    sec_cnt <= sec_cnt + 1'b1;  // 在 if(ms_cnt == _1MS_MAX) 分支下加计数，所以加到0.5秒仅需500个数
                 end
             end
             else 
@@ -97,6 +93,7 @@ module sys_divider #(
             sec_flag_s2 <= 1'b0;
             sec_flag_s3 <= 1'b0;
             pulse_1s    <= 1'b0;
+            sec_clk     <= 1'b1;   // 初值与原 divider 一致，为高电平
         end else begin
             ms_flag_s1  <= ms_flag;     // 第1级同步（可能亚稳态）
             ms_flag_s2  <= ms_flag_s1;  // 第2即同步（稳定输出）
@@ -110,7 +107,9 @@ module sys_divider #(
             // 每次跳变对应恰好过了1秒，pulse_out 高电平仅持续1个sys_clk周期(20ns)
             pulse_1ms <= ms_flag_s2  ^ ms_flag_s3;
             
-            pulse_1s  <= sec_flag_s2 ^ sec_flag_s3;
+            pulse_1s  <= sec_flag_s2 && ~sec_flag_s3;   // 一定是下降沿检测，这样的话就符合我对 clock 模式下小数点与秒的配合：前半秒小数点亮、后半秒灭
+            
+            sec_clk   <= sec_flag_s2;
         end
     end
     

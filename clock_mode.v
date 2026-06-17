@@ -549,7 +549,7 @@ begin
         counter_beep <= 0;
     else if(pulse_1s && alarm_ring_en)
         counter_beep <= counter_beep + 1'b1;
-    else if(pulse_1s && (counter_beep == CNT_BEEP - 1'b1) )
+    else if(pulse_1s && (counter_beep == CNT_BEEP) )
         counter_beep <= 0;
     else if(pulse_1s && counter_beep > 0)
         counter_beep <= counter_beep + 1'b1;

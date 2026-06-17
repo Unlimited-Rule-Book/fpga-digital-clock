@@ -1,3 +1,35 @@
+// =============================================================================
+// 文件名：alarm.v
+// 功能：闹钟浏览、编辑与时间匹配模块，支持4组闹钟
+//
+// 工作流程：
+//   1. 由 clock_mode 的 mode_alarm_en 使能后进入工作状态
+//   2. 默认为 ALARM_VIEW 浏览状态，通过 choose 短按切换浏览闹钟编号
+//      显示格式：{闹钟编号, E/d(使能状态), hour, minute} → seg_dynamic
+//   3. 在浏览状态下长按 choose（choose_edit 脉冲有效），进入 ALARM_EDIT 编辑状态
+//      编辑状态下先选中使能状态（可翻转），再选 hour，再选 minute
+//   4. 编辑完成后长按 load（load_confirm）将编辑值写入对应闹钟 memory
+//      短按 load 取消编辑，返回浏览状态
+//   5. 时间匹配：每 1 秒（sec_clk 上升沿）检测所有使能闹钟是否匹配当前时间，
+//      匹配时拉高 alarm_ring_en（维持1秒），由 clock_mode 触发蜂鸣器
+//
+// 内部状态机：
+//   ① current_alarm：ALARM_VIEW / ALARM_EDIT 数码管显示控制
+//   ② current_set：SET_STATE → SET_HOUR → SET_MINUTE 编辑字段选择、计数脉冲产生
+//   ③ twinkle：TWINKLE_STATE / TWINKLE_HOUR / TWINKLE_MINUTE 闪烁显示控制
+//
+// 子模块实例：
+//   counter ×4（分别编辑 hour 个位/十位、minute 个位/十位）
+//   bin2bcd_param ×1（闹钟编号 → BCD 显示）
+//
+// 注意：
+//   1. alarm_ring_en 在 sec_clk 上升沿检测，set 和 clear 在同一时钟沿完成
+//      （non-blocking 赋值，时序正确），维持 1 个 sec_clk 周期的高电平
+//   2. choose_edit_delay 延时一拍，确保 counter 读到由 view_num 计算得到的
+//      动态进制值，避免加载 FF 后立即被 counter 修正为 23
+//   3. 小时加/减双方向变进制逻辑与 load_num 中一致（24小时制）
+//   4. ALARM_VIEW 下 alarm_view_en=1，clock_mode 据此响应短按 load 返回时钟模式
+// =============================================================================
 module alarm
 (
 input   wire    mode_en,

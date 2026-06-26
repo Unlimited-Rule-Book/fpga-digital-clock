@@ -6,7 +6,7 @@
 //
 // RAM 数据编码（每12位，地址空间 256 字节）：
 //   bit[11:8] — 八度（3=Oct3, 4=Oct4, 5=Oct5, 0=休止, F=结束标记）
-//   bit[7:4]  — 音名（1=DO, 2=RE, 3=ME, 4=FA, 5=SO, 6=LA, 7=XI, 0=休止）
+//   bit[7:4]  — 音名（0=休止, 1=DO, 2=RE, 3=ME, 4=FA, 5=SO, 6=LA, 7=XI, 8=DO# RE♭, 9=RE# ME♭, A=FA# SO♭, B=SO# LA♭, C=LA# XI♭）
 //   bit[3:0]  — 时值（1=十六分, 2=八分, 3=附点八分, 4=四分,
 //                      6=附点四分, 8=二分, F=一分, F+F=结束标记）
 //
@@ -46,6 +46,11 @@ parameter   FA4 = 18'd143266, FA4_80 = 17'd114613 , FA4_50 = 17'd71633  , FA4_40
 parameter   SO4 = 17'd127551, SO4_80 = 17'd102041 , SO4_50 = 16'd63776  , SO4_40 = 16'd51020  , SO4_20 = 15'd25510  , SO4_10 = 14'd12755;
 parameter   LA4 = 17'd113636, LA4_80 =  17'd90909 , LA4_50 = 16'd56818  , LA4_40 = 16'd45454  , LA4_20 = 15'd22727  , LA4_10 = 14'd11364;
 parameter   XI4 = 17'd101214, XI4_80 =  17'd80971 , XI4_50 = 16'd50607  , XI4_40 = 16'd40486  , XI4_20 = 15'd20243  , XI4_10 = 14'd10121;
+parameter   DO4_HALF = 18'd180388,                    DO4_HALF_50 = 17'd90194;
+parameter   RE4_HALF = 18'd160705,                    RE4_HALF_50 = 17'd80352;
+parameter   FA4_HALF = 18'd135139,                    FA4_HALF_50 = 17'd67569;
+parameter   SO4_HALF = 17'd120395,                    SO4_HALF_50 = 16'd60197;
+parameter   LA4_HALF = 17'd107259,                    LA4_HALF_50 = 16'd53630;
 
 // 注意：这里必须用2不可用2'd2，因为在不同位宽的运算中，结果会取参与运算的数字中较大的那个，乘2后的结果DO3比乘数DO4宽，但是仍采用了DO4的位宽，
 // 导致高位被截断。而2的默认位宽是32，使得DO3位宽为32，就不会出现截断。
@@ -56,6 +61,11 @@ parameter   FA3 = FA4*2     , FA3_80 = FA4_80*2   , FA3_50 = FA4_50*2   , FA3_40
 parameter   SO3 = SO4*2     , SO3_80 = SO4_80*2   , SO3_50 = SO4_50*2   , SO3_40 = SO4_40*2   , SO3_20 = SO4_20*2   , SO3_10 = SO4_10*2   ;
 parameter   LA3 = LA4*2     , LA3_80 = LA4_80*2   , LA3_50 = LA4_50*2   , LA3_40 = LA4_40*2   , LA3_20 = LA4_20*2   , LA3_10 = LA4_10*2   ;
 parameter   XI3 = XI4*2     , XI3_80 = XI4_80*2   , XI3_50 = XI4_50*2   , XI3_40 = XI4_40*2   , XI3_20 = XI4_20*2   , XI3_10 = XI4_10*2   ;
+parameter   DO3_HALF = DO4_HALF*2,                  DO3_HALF_50 = DO4_HALF_50*2;
+parameter   RE3_HALF = RE4_HALF*2,                  RE3_HALF_50 = RE4_HALF_50*2;
+parameter   FA3_HALF = FA4_HALF*2,                  FA3_HALF_50 = FA4_HALF_50*2;
+parameter   SO3_HALF = SO4_HALF*2,                  SO3_HALF_50 = SO4_HALF_50*2;
+parameter   LA3_HALF = LA4_HALF*2,                  LA3_HALF_50 = LA4_HALF_50*2;
     
 parameter   DO5 = DO4/2'd2  , DO5_80 = DO4_80/2'd2, DO5_50 = DO4_50/2'd2, DO5_40 = DO4_40/2'd2, DO5_20 = DO4_20/2'd2, DO5_10 = DO4_10/2'd2;
 parameter   RE5 = RE4/2'd2  , RE5_80 = RE4_80/2'd2, RE5_50 = RE4_50/2'd2, RE5_40 = RE4_40/2'd2, RE5_20 = RE4_20/2'd2, RE5_10 = RE4_10/2'd2;
@@ -64,6 +74,11 @@ parameter   FA5 = FA4/2'd2  , FA5_80 = FA4_80/2'd2, FA5_50 = FA4_50/2'd2, FA5_40
 parameter   SO5 = SO4/2'd2  , SO5_80 = SO4_80/2'd2, SO5_50 = SO4_50/2'd2, SO5_40 = SO4_40/2'd2, SO5_20 = SO4_20/2'd2, SO5_10 = SO4_10/2'd2;
 parameter   LA5 = LA4/2'd2  , LA5_80 = LA4_80/2'd2, LA5_50 = LA4_50/2'd2, LA5_40 = LA4_40/2'd2, LA5_20 = LA4_20/2'd2, LA5_10 = LA4_10/2'd2;
 parameter   XI5 = XI4/2'd2  , XI5_80 = XI4_80/2'd2, XI5_50 = XI4_50/2'd2, XI5_40 = XI4_40/2'd2, XI5_20 = XI4_20/2'd2, XI5_10 = XI4_10/2'd2;
+parameter   DO5_HALF = DO4_HALF/2'd2,               DO5_HALF_50 = DO4_HALF_50/2'd2;
+parameter   RE5_HALF = RE4_HALF/2'd2,               RE5_HALF_50 = RE4_HALF_50/2'd2;
+parameter   FA5_HALF = FA4_HALF/2'd2,               FA5_HALF_50 = FA4_HALF_50/2'd2;
+parameter   SO5_HALF = SO4_HALF/2'd2,               SO5_HALF_50 = SO4_HALF_50/2'd2;
+parameter   LA5_HALF = LA4_HALF/2'd2,               LA5_HALF_50 = LA4_HALF_50/2'd2;
 
 parameter   EMPTY = 0;
 // RAM 相关
@@ -80,7 +95,7 @@ wire [11:0]  rd_data; // 从 RAM 里找出来的值
 // 拍子计时
 // 每一拍的时长
 parameter   CLK = 50_000_000;
-parameter   BPM = 7'd80;    // BPM 是以4分音符为1拍
+parameter   BPM = 7'd90;    // BPM 是以4分音符为1拍。起风了 qifengle.mif 设置成80。认清现实的小曲儿 your_new_home.mif 设置成90
 parameter   PAI = 5'd16;    // 16分音符为1拍，所以下面的 BPM 要乘 PAI/3'd4 = 4
 parameter   CNT_T1P_MAX = CLK * 6'd60 / (BPM * PAI/3'd4 ); // 1拍的计数
 
@@ -157,29 +172,44 @@ begin
     end
     else begin
         case(rd_data[11:4])                                    
-        8'h31 : begin    freq_data <= DO3;    duty_data <= DO3_50; end
-        8'h32 : begin    freq_data <= RE3;    duty_data <= RE3_50; end
-        8'h33 : begin    freq_data <= ME3;    duty_data <= ME3_50; end
-        8'h34 : begin    freq_data <= FA3;    duty_data <= FA3_50; end
-        8'h35 : begin    freq_data <= SO3;    duty_data <= SO3_50; end
-        8'h36 : begin    freq_data <= LA3;    duty_data <= LA3_50; end
-        8'h37 : begin    freq_data <= XI3;    duty_data <= XI3_50; end
+        8'h31 : begin    freq_data <= DO3;      duty_data <= DO3_50; end
+        8'h32 : begin    freq_data <= RE3;      duty_data <= RE3_50; end
+        8'h33 : begin    freq_data <= ME3;      duty_data <= ME3_50; end
+        8'h34 : begin    freq_data <= FA3;      duty_data <= FA3_50; end
+        8'h35 : begin    freq_data <= SO3;      duty_data <= SO3_50; end
+        8'h36 : begin    freq_data <= LA3;      duty_data <= LA3_50; end
+        8'h37 : begin    freq_data <= XI3;      duty_data <= XI3_50; end
+        8'h38 : begin    freq_data <= DO3_HALF; duty_data <= DO3_HALF_50; end
+        8'h39 : begin    freq_data <= RE3_HALF; duty_data <= RE3_HALF_50; end
+        8'h3A : begin    freq_data <= FA3_HALF; duty_data <= FA3_HALF_50; end
+        8'h3B : begin    freq_data <= SO3_HALF; duty_data <= SO3_HALF_50; end
+        8'h3C : begin    freq_data <= LA3_HALF; duty_data <= LA3_HALF_50; end
                                                                
-        8'h41 : begin    freq_data <= DO4;    duty_data <= DO4_50; end
-        8'h42 : begin    freq_data <= RE4;    duty_data <= RE4_50; end
-        8'h43 : begin    freq_data <= ME4;    duty_data <= ME4_50; end
-        8'h44 : begin    freq_data <= FA4;    duty_data <= FA4_50; end
-        8'h45 : begin    freq_data <= SO4;    duty_data <= SO4_50; end
-        8'h46 : begin    freq_data <= LA4;    duty_data <= LA4_50; end
-        8'h47 : begin    freq_data <= XI4;    duty_data <= XI4_50; end
+        8'h41 : begin    freq_data <= DO4;      duty_data <= DO4_50; end
+        8'h42 : begin    freq_data <= RE4;      duty_data <= RE4_50; end
+        8'h43 : begin    freq_data <= ME4;      duty_data <= ME4_50; end
+        8'h44 : begin    freq_data <= FA4;      duty_data <= FA4_50; end
+        8'h45 : begin    freq_data <= SO4;      duty_data <= SO4_50; end
+        8'h46 : begin    freq_data <= LA4;      duty_data <= LA4_50; end
+        8'h47 : begin    freq_data <= XI4;      duty_data <= XI4_50; end
+        8'h48 : begin    freq_data <= DO4_HALF; duty_data <= DO4_HALF_50; end
+        8'h49 : begin    freq_data <= RE4_HALF; duty_data <= RE4_HALF_50; end
+        8'h4A : begin    freq_data <= FA4_HALF; duty_data <= FA4_HALF_50; end
+        8'h4B : begin    freq_data <= SO4_HALF; duty_data <= SO4_HALF_50; end
+        8'h4C : begin    freq_data <= LA4_HALF; duty_data <= LA4_HALF_50; end
                                                                
-        8'h51 : begin    freq_data <= DO5;    duty_data <= DO5_50; end
-        8'h52 : begin    freq_data <= RE5;    duty_data <= RE5_50; end
-        8'h53 : begin    freq_data <= ME5;    duty_data <= ME5_50; end
-        8'h54 : begin    freq_data <= FA5;    duty_data <= FA5_50; end
-        8'h55 : begin    freq_data <= SO5;    duty_data <= SO5_50; end
-        8'h56 : begin    freq_data <= LA5;    duty_data <= LA5_50; end
-        8'h57 : begin    freq_data <= XI5;    duty_data <= XI5_50; end
+        8'h51 : begin    freq_data <= DO5;      duty_data <= DO5_50; end
+        8'h52 : begin    freq_data <= RE5;      duty_data <= RE5_50; end
+        8'h53 : begin    freq_data <= ME5;      duty_data <= ME5_50; end
+        8'h54 : begin    freq_data <= FA5;      duty_data <= FA5_50; end
+        8'h55 : begin    freq_data <= SO5;      duty_data <= SO5_50; end
+        8'h56 : begin    freq_data <= LA5;      duty_data <= LA5_50; end
+        8'h57 : begin    freq_data <= XI5;      duty_data <= XI5_50; end
+        8'h58 : begin    freq_data <= DO5_HALF; duty_data <= DO5_HALF_50; end
+        8'h59 : begin    freq_data <= RE5_HALF; duty_data <= RE5_HALF_50; end
+        8'h5A : begin    freq_data <= FA5_HALF; duty_data <= FA5_HALF_50; end
+        8'h5B : begin    freq_data <= SO5_HALF; duty_data <= SO5_HALF_50; end
+        8'h5C : begin    freq_data <= LA5_HALF; duty_data <= LA5_HALF_50; end
         
         8'h00 : begin    freq_data <= EMPTY;  duty_data <= EMPTY;  end  // 休止符
         8'hFF : begin    freq_data <= EMPTY;  duty_data <= EMPTY;  end  // 结束标记。看似没啥用，因为遇到结束标记，RAM指针rd_data就归零，但是假如遇到了，得能有对应的值可查

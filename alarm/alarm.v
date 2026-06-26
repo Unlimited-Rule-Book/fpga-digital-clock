@@ -12,11 +12,21 @@
 //      短按 load 取消编辑，返回浏览状态
 //   5. 时间匹配：每 1 秒（sec_clk 上升沿）检测所有使能闹钟是否匹配当前时间，
 //      匹配时拉高 alarm_ring_en（维持1秒），由 clock_mode 触发蜂鸣器
+//   6. 鸣响显示：当 clock_mode 拉高 alarm_beep_disp_en 时，
+//      本模块通过 index_beep 找到正在鸣响的闹钟，
+//      将其时间以 1Hz 慢闪烁（1秒亮/1秒灭）输出到 disp_* 端口，
+//      供顶层的 seg_dynamic 扫描显示。此时 mode_en=0，显示由 alarm_beep_disp_en 接管。
 //
 // 内部状态机：
 //   ① current_alarm：ALARM_VIEW / ALARM_EDIT 数码管显示控制
 //   ② current_set：SET_STATE → SET_HOUR → SET_MINUTE 编辑字段选择、计数脉冲产生
 //   ③ twinkle：TWINKLE_STATE / TWINKLE_HOUR / TWINKLE_MINUTE 闪烁显示控制
+//
+// 显示输出（disp_state / disp_hour / disp_minute / point_out）的三路选择：
+//   · ALARM_VIEW 模式（mode_en=1）：输出当前浏览闹钟的编号+使能状态+时间
+//   · ALARM_EDIT 模式（mode_en=1）：输出编辑中的值（含选中位闪烁）
+//   · 鸣响显示模式（mode_en=0, alarm_beep_disp_en=1）：输出 index_beep 所指闹钟的时间（以 sec_clk_div 二分频实现1秒亮/1秒灭慢闪烁，其余位全灭）
+//   · 未使能（mode_en=0, alarm_beep_disp_en=0）：输出 8'hFF（全亮，在 seg_dynamic中被其他模块的输出覆盖，不可见）
 //
 // 子模块实例：
 //   counter ×4（分别编辑 hour 个位/十位、minute 个位/十位）
@@ -29,6 +39,8 @@
 //      动态进制值，避免加载 FF 后立即被 counter 修正为 23
 //   3. 小时加/减双方向变进制逻辑与 load_num 中一致（24小时制）
 //   4. ALARM_VIEW 下 alarm_view_en=1，clock_mode 据此响应短按 load 返回时钟模式
+//   5. index_beep 在时间匹配循环中被赋值（记录触发闹钟编号），在鸣响显示模式下用于从 memory 读取正确的闹钟时间进行闪烁显示
+//   6. sec_clk_div 是 sec_clk 的二分频信号（跳沿检测产生），实现鸣响显示时的 1Hz 慢闪烁（比编辑模式的 sec_clk 直接闪烁慢一半）
 // =============================================================================
 module alarm
 (
@@ -45,6 +57,7 @@ input   wire    num_down,
 input   wire    [7:0]   now_second,
 input   wire    [7:0]   now_minute,
 input   wire    [7:0]   now_hour,
+input   wire    alarm_beep_disp_en,
 
 output  wire    [7:0]   disp_state,     // 置数模式下，数码管的显示
 output  wire    [7:0]   disp_hour,      // 涵盖 LOAd 、置数值的显示
@@ -109,17 +122,6 @@ begin
     else
     mode_updown = 1'b0;
 end
-// always@(posedge sys_clk)
-// begin
-    // if(~rst_n)
-        // mode_updown <= 1'b0;
-    // else if(num_up==1'b0)
-        // mode_updown <= 1'b0;
-    // else if(num_down==1'b0)
-        // mode_updown <= 1'b1;
-    // else
-        // mode_updown <= 1'b0;
-// end
 
 
 
@@ -290,7 +292,6 @@ begin
             end
             SET_HOUR:
             begin
-                state_tmp <= state_tmp;
                 min_pulse <= 1'b0;
                 twinkle <= TWINKLE_HOUR;    // 用于控制该数位闪烁
     
@@ -303,7 +304,6 @@ begin
             end        
             SET_MINUTE:
             begin
-                state_tmp <= state_tmp;
                 hor_pulse <= 1'b0;
                 twinkle <= TWINKLE_MINUTE;    // 用于控制该数位闪烁
             
@@ -490,20 +490,86 @@ else begin
 end
 end
 
+
+
+
+//  ====================  闹钟鸣响时，如果顶层处于 CLOCK 状态，则会给 alarm_beep_disp_en 使能，alarm输出鸣响的闹钟的时间并闪烁  ====================
+// 1秒亮1秒灭，慢点闪烁，便于观察
+reg sec_clk_prev;
+always@(posedge sys_clk)     sec_clk_prev <= sec_clk;
+reg sec_clk_div;
+always@(posedge sys_clk) begin
+    if(!rst_n)  sec_clk_div <= 1'b0;
+    else if(sec_clk && ~sec_clk_prev) sec_clk_div <= ~sec_clk_div;
+end
+reg [$clog2(ALARM_CNT):0] index_beep;   // 在检测时间模块里，记录是哪个闹钟鸣响
+reg [7:0]   beep_hour;
+reg [7:0]   beep_minute;
+reg [7:0]   beep_second;
+reg [5:0]   beep_point;
+// 注意，此时不显示闹钟使能状态，显示时分秒
+always@(posedge sys_clk)
+begin
+    if(!rst_n)begin
+        beep_hour   <= {SHOW_EMPTY,SHOW_EMPTY};
+        beep_minute <= {SHOW_EMPTY,SHOW_EMPTY}; 
+        beep_second <= {SHOW_EMPTY,SHOW_EMPTY};
+    end
+    else if(sec_clk_div)  begin
+        beep_hour   <= memory[index_beep][15:8];
+        beep_minute <= memory[index_beep][7 :0];
+        beep_second <= 8'd0;    // 秒不可设置，默认为00秒
+        beep_point  <= 6'd0;
+    end
+    else if(~sec_clk_div) begin
+        beep_hour   <= {SHOW_EMPTY,SHOW_EMPTY};
+        beep_minute <= {SHOW_EMPTY,SHOW_EMPTY};
+        beep_second <= {SHOW_EMPTY,SHOW_EMPTY};
+        beep_point  <= 6'b010100;
+    end
+end
+// 检测时间是否到了
+reg [$clog2(ALARM_CNT):0] index;    // 这里的位宽必须为3，否则index计到4会溢出归零，永远达不到index < ALARM_NUM条件，而终止条件必须设为这样，否则检测不到3号闹钟
+always@(posedge sys_clk)
+begin
+    if(!rst_n)
+        alarm_ring_en <= 1'b0;
+    else begin
+        if(sec_clk && ~sec_clk_prev) begin  // 每1秒检测一次，对 sec_clk 跳沿检测
+            for (index = 1'b0; index < ALARM_CNT; index = index + 1'b1)begin
+                if (memory[index][16])begin
+                    if({memory[index][15:0],8'h00} == {now_hour,now_minute,now_second}) begin
+                        alarm_ring_en <= 1'b1;
+                        index_beep    <= index;
+                    end
+                end
+            end
+            if(alarm_ring_en)
+                alarm_ring_en <= 1'b0;
+        end
+    end
+end
+
+
+
+
 // 数显控制，模式为LOAD_SHOW时，显示LOAd；模式为ALARM_EDIT时显示read_*；模式为ALARM_VIEW时显示为全显示（seg_dynamic编码，F 4'd15为全显示）
 
 // 需要增加 ready_state ,去掉 ready_sec =================================================================================================
-
 assign  disp_state  = (mode_en && current_alarm==ALARM_VIEW) ? {alarm_num_bcd, alarm_state_show(memory[alarm_num][16])} : 
                       (mode_en && current_alarm==ALARM_EDIT) ? ready_state      :
+                      (~mode_en&& alarm_beep_disp_en)        ? beep_hour        :
                       8'hFF;   // 增加完全关闭时的保护：mode_en使能且ALARM_VIEW待机时，或者干脆没使能时，都为FF，seg_dynamic编码为全显示
 assign  disp_hour   = (mode_en && current_alarm==ALARM_VIEW) ? view_num[15:8]   : 
                       (mode_en && current_alarm==ALARM_EDIT) ? ready_hour       :
+                      (~mode_en&& alarm_beep_disp_en)        ? beep_minute      :
                       8'hFF;
 assign  disp_minute = (mode_en && current_alarm==ALARM_VIEW) ? view_num[7:0]    : 
                       (mode_en && current_alarm==ALARM_EDIT) ? ready_minute     :
+                      (~mode_en&& alarm_beep_disp_en)        ? beep_second      :
                       8'hFF;                 
-assign point_out = load_piont;
+assign  point_out   = (~mode_en&& alarm_beep_disp_en)        ? beep_point       :
+                      load_piont;
 
 
 
@@ -523,32 +589,6 @@ begin
             memory[alarm_num][16]   <= state_tmp;
             memory[alarm_num][15:8] <= edit_hour;
             memory[alarm_num][7:0]  <= edit_minute;
-        end
-    end
-end
-
-
-// 检测时间是否到了
-// 每1秒检测一次，对 sec_clk 跳沿检测
-reg sec_clk_prev;
-reg [$clog2(ALARM_CNT):0] index;    // 这里的位宽必须为3，否则index计到4会溢出归零，永远达不到index < ALARM_NUM条件，而终止条件必须设为这样，否则检测不到3号闹钟
-always@(posedge sys_clk)
-begin
-    if(!rst_n) begin
-        alarm_ring_en <= 1'b0;
-        sec_clk_prev <= 1'b0;
-    end
-    else begin
-        sec_clk_prev <= sec_clk;
-        if(sec_clk && ~sec_clk_prev) begin
-            for (index = 1'b0; index < ALARM_CNT; index = index + 1'b1)begin
-                if (memory[index][16])begin
-                    if({memory[index][15:0],8'h00} == {now_hour,now_minute,now_second})
-                        alarm_ring_en <= 1'b1;
-                end
-            end
-            if(alarm_ring_en)
-                alarm_ring_en <= 1'b0;
         end
     end
 end

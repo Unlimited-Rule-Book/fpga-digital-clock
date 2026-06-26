@@ -20,7 +20,9 @@
 - ✅ 置数模式：短按load键切换模式，可分别设置时/分/秒，长按确认，16秒无操作自动退出
 
     （由于LOAd显示占用时间，实际在编辑置数的界面是约14秒无操作自动退出）
-- ✅ 闹钟模式：4组闹钟，支持使能/失能切换、分别设置时/分（秒固定为00），闹钟触发时播放乐曲，响90秒后自动停止，任意按键可提前关闭
+- ✅ 闹钟模式：4组闹钟，支持使能/失能切换、分别设置时/分（秒固定为00）
+- ✅ 闹钟鸣响：闹钟触发时播放乐曲《起风了》或《your new home》，响90秒后自动停止，按choose、num_up、num_down任意键可提前关闭
+- ✅ 鸣响显示：闹钟触发时数码管自动切换到鸣响显示模式，以1Hz慢闪烁显示当前鸣响闹钟的时间
 
 ### 软件架构
 <details>
@@ -69,30 +71,38 @@ clock_mode.v ← 顶层模块，整个项目的入口
 ├── load_s_pulse / load_l_pulse（各1个sys_clk周期宽的低电平脉冲）
 │ └── 由 load_bs_s / load_bs_l 的下降沿（prev=1→now=0）产生
 │
-│ ── 模式状态机（在clock_mode内部）──
-├── 状态机 MODE [2位寄存器，初值MODE_CLOCK]
+│ ── 模式状态机（在clock_mode内部，三段式：状态更新/状态切换/状态输出）──
+├── 状态机 cs/ns [2位寄存器，初值MODE_CLOCK]
 │ ├── MODE_CLOCK（00）：时钟模式，正常走时显示
-│ │ └── 转出条件：load短按（load_s_pulse=0）→ MODE_LOAD
+│ │ ├── 转出条件A：load短按（load_s_pulse=0）→ MODE_LOAD
+│ │ └── 转出条件B：beep_en=1（闹钟触发）→ MODE_BEEP
 │ ├── MODE_LOAD（01）：置数模式
 │ │ ├── 转出条件A：load短按（load_s_pulse=0, load_l_pulse=1）→ MODE_ALARM
 │ │ ├── 转出条件B：load长按（load_s_pulse=1, load_l_pulse=0）→ MODE_CLOCK（确认置数）
 │ │ └── 转出条件C：16s内 choose/num_up/num_down 均无变化 → MODE_CLOCK（超时取消）
 │ │ 16s计时：counter_16s 以 pulse_1s 为使能，按键电平跳变时清零
-│ └── MODE_ALARM（10）：闹钟模式
-│ └── 转出条件：alarm_view_en=1 且 load短按（load_s_pulse=0）→ MODE_CLOCK
+│ ├── MODE_ALARM（10）：闹钟模式
+│ │ └── 转出条件：alarm_view_en=1 且 load短按（load_s_pulse=0）→ MODE_CLOCK
+│ └── MODE_BEEP（11）：闹钟鸣响显示模式
+│ ├── 进入条件：cs=MODE_CLOCK 且 beep_en=1（由 alarm_ring_en 触发 counter_beep 自增引起）
+│ ├── 数码管显示来源：alarm.v 的输出（由 alarm_beep_disp_en=1 控制显示鸣响闹钟时间）
+│ └── 转出条件：beep_en=0（counter_beep计满90秒 或 按键中断）→ MODE_CLOCK
 │
 │ ── 信号路由与使能 ──
 ├── mode_load_en（MODE_LOAD时为1，其余为0）→ load_num 的工作使能
 ├── mode_alarm_en（MODE_ALARM时为1，其余为0）→ alarm 的工作使能
+├── alarm_beep_disp_en（MODE_BEEP时为1，其余为0）→ alarm 的鸣响显示使能
 ├── 按键放行
 │ ├── MODE_CLOCK：choose/nump/nupn 强制为1（屏蔽）；load 响应短按进行模式切换
 │ ├── MODE_LOAD ：choose/nump/nupn 直通至 load_num；load 短按切闹钟/长按确认置数
-│ └── MODE_ALARM：choose 接 choose_bs_s/l（短按切换闹钟/长按进入编辑）
-│ num_up/down 直通至 alarm；load 短按取消/长按确认闹钟
-├── 显示数据选择（disp_second/minute/hour, point_disp）
+│ ├── MODE_ALARM：choose 接 choose_bs_s/l（短按切换闹钟/长按进入编辑）
+│ │ num_up/down 直通至 alarm；load 短按取消/长按确认闹钟
+│ └── MODE_BEEP ：所有按键屏蔽（仅响应 button_now ≠ button_prev 中断闹钟）
+├── 显示数据选择（disp_second/minute/hour, disp_point）
 │ ├── MODE_CLOCK/default：接 clock.v 的 out_、point_out
 │ ├── MODE_LOAD ：接 load_num.v 的 disp_、point_out
-│ └── MODE_ALARM ：接 alarm.v 的 disp_state/hour/minute、point_out
+│ ├── MODE_ALARM ：接 alarm.v 的 disp_state/hour/minute、point_out
+│ └── MODE_BEEP ：接 alarm.v 的 disp_（由 alarm_beep_disp_en 控制输出鸣响闹钟时间）
 │
 │ ── 置数信号路径 ──
 ├── load_clock（接 clock.v 的 load 口）
@@ -112,7 +122,7 @@ clock_mode.v ← 顶层模块，整个项目的入口
 │ └── 输出：out_second/minute/hour（BCD）、point_out（固定 6'b010100）
 │
 │ ── 置数子系统 ──
-└── load_num.v（mode_load_en使能后工作）
+├── load_num.v（mode_load_en使能后工作）
 ├── 接收：mode_en(=mode_load_en)、sys_clk、sec_clk、rst_n
 │ load_confirm(=load_l_pulse)、choose/num_up/num_down(经放行后)
 │ before_(= clock.v 的 out_)
@@ -153,61 +163,69 @@ clock_mode.v ← 顶层模块，整个项目的入口
 → 经 clock_mode 延迟一拍后送入 clock.v 的 load 口完成置数
 │
 │ ── 闹钟子系统 ──
-└── alarm.v（mode_alarm_en使能后工作）
-├── 接收：mode_en(=mode_alarm_en)、sys_clk、sec_clk、rst_n
-│ load(=load_s_pulse)、load_confirm(=load_l_pulse)
-│ choose(=choose_bs_s)、choose_edit(=choose_bs_l)
-│ num_up_bs/num_down_bs / now_{second,minute,hour}(=clock.v out_)
-│
-├── 寄存器堆 memory[0:3]：4组闹钟 × 17位
-│ └── {en[1位], hour[8位BCD], minute[8位BCD]}，秒固定为 00
-│
-├── bin2bcd_param.v（闹钟编号二进制 → BCD编码显示）
-│
-├── 状态机①：显示控制（current_alarm）
-│ ├── ALARM_VIEW：浏览闹钟列表，按 choose 短按切换编号（0~3循环）
-│ │ ├── 显示：{编号BCD, E/d(使能状态), hour, minute}
-│ │ ├── alarm_view_en=1（顶层据此响应短按 load 返回时钟模式）
-│ │ └── 长按 choose 进入 ALARM_EDIT
-│ └── ALARM_EDIT：编辑当前闹钟
-│ ├── 退出：短按 load（取消编辑）/ 长按 load（确认写入 memory）
-│ └── alarm_view_en=0（禁止顶层响应短按 load）
-│
-├── 状态机②：编辑字段选择与计数脉冲产生（current_set）
-│ ├── SET_STATE ：使能状态翻转（num_up/down 翻转 en 位）
-│ ├── SET_HOUR ：hor_pulse 由 num_up/down 下降沿产生
-│ └── SET_MINUTE ：min_pulse 同上
-│ choose 下降沿切换状态；set_en 上升沿复位回 SET_STATE
-│ set_en_prev 检测沿，初始时 latch memory[alarm_num][16] 到 state_tmp
-│
-├── counter.v [实例化×4]（与 clock/load_num 复用同一模块）
-│ ├── hor0/hor1：时钟 = hor_pulse，支持加减计数
-│ └── min0/min1：时钟 = min_pulse，支持加减计数
-│ hour_radix 变进制与 load_num 相同（24小时制，含 FF 特殊处理）
-│ choose_edit_delay 延时一拍确保 counter 正确加载 view_num
-│ 参数 min_radix0/min_radix1/hour_radix1 同样考虑 FF 边界情况
-│
-├── 状态机③：闪烁显示（twinkle，由状态机②控制）
-│ ├── TWINKLE_STATE ：状态位（闹钟编号 + E/d）sec_clk 高时全灭，低时显示
-│ ├── TWINKLE_HOUR ：时位闪烁
-│ └── TWINKLE_MINUTE：分位闪烁
-│ ready_{state, hour, minute} 暂存含闪烁逻辑的显示值
-│
-├── 时间匹配（每 sec_clk 上升沿）
-│ ├── for 循环遍历 4 组闹钟：若 en=1 且 {hour,minute,00} 匹配 now_time
-│ │ → alarm_ring_en <= 1'b1
-│ └── 若上周期 alarm_ring_en=1 且本轮无新匹配 → alarm_ring_en <= 1'b0
-│ alarm_ring_en 维持 1 个 sec_clk 周期，用于触发蜂鸣器
-│
-└── 显示输出（assign）
-├── ALARM_VIEW：{编号BCD, E/d, memory[hour], memory[minute]}
-└── ALARM_EDIT：ready_{state, hour, minute}（含闪烁）
+├── alarm.v（mode_alarm_en使能后工作；鸣响显示时由 alarm_beep_disp_en 使能）
+│ ├── 接收：mode_en(=mode_alarm_en)、sys_clk、sec_clk、rst_n
+│ │ load(=load_s_pulse)、load_confirm(=load_l_pulse)
+│ │ choose(=choose_bs_s)、choose_edit(=choose_bs_l)
+│ │ num_up_bs/num_down_bs / now_{second,minute,hour}(=clock.v out_)
+│ │ alarm_beep_disp_en（来自clock_mode，鸣响时拉高）
+│ │
+│ ├── 寄存器堆 memory[0:3]：4组闹钟 × 17位
+│ │ └── {en[1位], hour[8位BCD], minute[8位BCD]}，秒固定为 00
+│ │
+│ ├── bin2bcd_param.v（闹钟编号二进制 → BCD编码显示）
+│ │
+│ ├── 状态机①：显示控制（current_alarm）
+│ │ ├── ALARM_VIEW：浏览闹钟列表，按 choose 短按切换编号（0~3循环）
+│ │ │ ├── 显示：{编号BCD, E/d(使能状态), hour, minute}
+│ │ │ ├── alarm_view_en=1（顶层据此响应短按 load 返回时钟模式）
+│ │ │ └── 长按 choose 进入 ALARM_EDIT
+│ │ └── ALARM_EDIT：编辑当前闹钟
+│ │ ├── 退出：短按 load（取消编辑）/ 长按 load（确认写入 memory）
+│ │ └── alarm_view_en=0（禁止顶层响应短按 load）
+│ │
+│ ├── 状态机②：编辑字段选择与计数脉冲产生（current_set）
+│ │ ├── SET_STATE ：使能状态翻转（num_up/down 翻转 en 位）
+│ │ ├── SET_HOUR ：hor_pulse 由 num_up/down 下降沿产生
+│ │ └── SET_MINUTE：min_pulse 同上
+│ │ choose 下降沿切换状态；set_en 上升沿复位回 SET_STATE
+│ │ set_en_prev 检测沿，初始时 latch memory[alarm_num][16] 到 state_tmp
+│ │
+│ ├── counter.v [实例化×4]（与 clock/load_num 复用同一模块）
+│ │ ├── hor0/hor1：时钟 = hor_pulse，支持加减计数
+│ │ └── min0/min1：时钟 = min_pulse，支持加减计数
+│ │ hour_radix 变进制与 load_num 相同（24小时制，含 FF 特殊处理）
+│ │ choose_edit_delay 延时一拍确保 counter 正确加载 view_num
+│ │ 参数 min_radix0/min_radix1/hour_radix1 同样考虑 FF 边界情况
+│ │
+│ ├── 状态机③：闪烁显示（twinkle，由状态机②控制）
+│ │ ├── TWINKLE_STATE ：状态位（闹钟编号 + E/d）sec_clk 高时全灭，低时显示
+│ │ ├── TWINKLE_HOUR ：时位闪烁
+│ │ └── TWINKLE_MINUTE：分位闪烁
+│ │ ready_{state, hour, minute} 暂存含闪烁逻辑的显示值
+│ │
+│ ├── 时间匹配（每 sec_clk 上升沿）
+│ │ ├── for 循环遍历 4 组闹钟：若 en=1 且 {hour,minute,00} 匹配 now_time
+│ │ │ → alarm_ring_en <= 1'b1；同时 index_beep <= index 记录触发闹钟编号
+│ │ └── 若上周期 alarm_ring_en=1 且本轮无新匹配 → alarm_ring_en <= 1'b0
+│ │ alarm_ring_en 维持 1 个 sec_clk 周期，用于触发蜂鸣器
+│ │
+│ ├── 鸣响显示（alarm_beep_disp_en=1, mode_en=0 时生效）
+│ │ ├── sec_clk_div：sec_clk 的二分频信号（跳沿检测产生），用于1Hz慢闪烁
+│ │ ├── index_beep：时间匹配时记录触发闹钟编号，鸣响显示时用于索引 memory
+│ │ ├── beep_hour/minute/second：以 sec_clk_div 控制，1秒输出时间、1秒输出全灭
+│ │ └── 显示数据通过 disp_* 端口送出，上报 clock_mode 的 seg_dynamic
+│ │
+│ └── 显示输出（assign，三路选择）
+│ ├── ALARM_VIEW：{编号BCD, E/d, memory[hour], memory[minute]}
+│ ├── ALARM_EDIT：ready_{state, hour, minute}（含闪烁）
+│ └── 鸣响显示：beep_{hour, minute, second}（含1Hz慢闪烁）
 │
 │ ── 蜂鸣器（在clock_mode内部） ──
 ├── counter_beep [7位，CNT_BEEP=90]
 │ ├── alarm_ring_en 为高时开始计数（pulse_1s 驱动）
-│ ├── 计数到 89 时归零（beep_en 随之拉低）
-│ ├── choose num_up/down 中任意按键按下（button_now ≠ button_prev）立即归零
+│ ├── 计数到 89 时归零（beep_en 随之拉低，状态机返回 MODE_CLOCK）
+│ ├── choose/num_up/num_down 中任意按键按下（button_now ≠ button_prev）立即归零
 │ └── beep_en = counter_beep > 0
 │
 ├── beep_song.v（乐曲播放）
@@ -225,13 +243,13 @@ clock_mode.v ← 顶层模块，整个项目的入口
 │ └── beep 在 duty_data(=freq_data/2) 前为高，之后为低（50%占空比）
 │
 │ ── 共享显示输出 ──
-├── seg_dynamic.v（顶层唯一实例，三种模式共用）
+├── seg_dynamic.v（顶层唯一实例，四种模式共用）
 │ ├── 输入：disp_*/point_disp（由状态机选择的当前模式数据）
 │ ├── 扫描时钟：pre_clk(1MHz) 内部计500次生成 seg_toggle，CDC到 sys_clk 域
 │ ├── 小数点：sec_clk 电平控制 point_disp 输出（低电平点亮，闪烁由 sec_clk 状态切换实现）
 │ └── 输出：sel（6位位选）、seg（8位段码）→ hc595_ctrl
 │
-└── hc595_ctrl.v（顶层唯一实例，三种模式共用）
+└── hc595_ctrl.v（顶层唯一实例，四种模式共用）
 ├── 移位时钟：sys_clk 四分频 ≈ 12.5MHz（满足 HC595 时序要求）
 ├── 数据格式：14位串行（8位段码 seg + 6位位选 sel，低位先传）
 └── 输出：stcp / shcp / ds / oe → 两片级联74HC595 → 六位数码管
@@ -252,5 +270,7 @@ clock_mode.v ← 顶层模块，整个项目的入口
 
     说得比较抽象， load_num 代码中有详细解释。
 - alarm_ring_en 维持1秒高电平后自动清除，输出到 clock_mode 里，触发 counter_beep 自增，计数未达到90前， beep_en 持续拉高，作为 beep_song 模块的输入
+- 闹钟鸣响时，状态机自动从 MODE_CLOCK 切换到 MODE_BEEP，数码管显示当前鸣响闹钟的时间（以1Hz慢闪烁，1秒亮/1秒灭）
+- 闹钟鸣响显示的数据流：alarm.v 在时间匹配时用 index_beep 记录触发闹钟编号，clock_mode 拉高 alarm_beep_disp_en 后，alarm.v 将对应闹钟时间以闪烁形式输出到 disp_* 端口，供 seg_dynamic 扫描显示
 - 本仓库为私人备份，不公开。
 - VScode里 ctrl + shift + v 预览markdown文件

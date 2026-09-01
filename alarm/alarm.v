@@ -46,7 +46,7 @@ module alarm
 (
 input   wire    mode_en,
 input   wire    sys_clk,
-input   wire    sec_clk,                // 1Hz时钟，用于控制 LOAd 显示时长，控制 ALARM_EDIT 状态下，被选中的数位闪烁的逻辑
+input   wire    sec_clk,                // 1Hz时钟，用于控制 ALARM_EDIT 状态下，被选中的数位闪烁的逻辑
 input   wire    rst_n,
 input   wire    load,                   // 短按load，用于取消对某个闹钟的设置，在顶层与 load_s_pulse 相连接。
 input   wire    load_confirm,           // 长按load，用于确认对某个闹钟的设置，在顶层与 load_l_pulse 相连接

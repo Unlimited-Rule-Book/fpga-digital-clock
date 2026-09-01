@@ -5,7 +5,7 @@
 // 模式定义（MODE状态机，2位）：
 //   MODE_CLOCK（2'b00）：正常走时显示模式（上电默认）
 //   MODE_LOAD （2'b01）：时间置数模式
-//   MODE_ALARM（2'b10）：闹钟设置模式（功能待完善）
+//   MODE_ALARM（2'b10）：闹钟设置模式
 //   MODE_BEEP （2'b11）：闹钟鸣响显示模式（进入条件是 beep_en=1，退出条件是 beep_en=0。在此状态下数码管显示鸣响闹钟的时间）
 //
 // 按键功能说明：
@@ -17,7 +17,7 @@
 // ├────────────────────────────────────────────────────────────────────────┤
 // │  置数模式     │  短按 load             │  进入闹钟模式的浏览闹钟界面   │
 // │  置数模式     │  长按 load             │  确认置数，返回时钟模式       │
-// │  置数模式     │  16s 无操作            │  超时，返回时钟模式(置数取消) │
+// │  置数模式     │  15s 无操作            │  超时，返回时钟模式(置数取消) │
 // │  置数模式     │  短按 choose           │  （在 load_num 中）切换设置位 │
 // │  置数模式     │  短按 num_up           │  （在 load_num 中）当前位+1   │
 // │  置数模式     │  短按 num_down         │  （在 load_num 中）当前位-1   │
@@ -32,7 +32,7 @@
 // │  鸣响显示模式 │  短按 choose/num_up/   │  手动停止闹钟，返回时钟模式   │
 // │               │  num_down              │                               │
 // └────────────────────────────────────────────────────────────────────────┘
-// 注意：由于 LOAd要的显示1秒，故“16秒无操作返回”实际上在置数的数字编辑页面只能显示约14秒
+// 注意：由于 LOAd要的显示1秒，故“15秒无操作返回”实际上在置数的数字编辑页面只能显示约14秒
 // 总结：load键：短按在不同模式之间切换，长按确认，
 //      所以短按load，是顶层信号；长按load，是子模块信号。前者是状态机的切换条件，后者是状态机内的控制信号！
 //
@@ -110,7 +110,7 @@ wire sys_clk_1mhz;
 wire locked_sig;
 // 系统时钟PLL输出1MHz
 my_pll_divider	my_pll_divider_inst (
-	.areset ( ~rst_n_input ),      // 我的系统复位低有效，而PLL复位高有效，所以这里这么写？
+	.areset ( 1'b0 ),      // 我的系统复位低有效，而PLL复位高有效，所以这里填0。另外， PLL 的复位不应受外部reset按键控制，其复位进上电时自动复位，故areset连接成无效。
 	.inclk0 ( sys_clk ),
     
 	.c0 ( sys_clk_1mhz ),
@@ -310,11 +310,14 @@ localparam  MODE_BEEP  = 2'b11;
 reg [1:0]   cs, ns;
 
 
-// load_num、alarm模式：若16秒内无按键输入，自动切换回clock模式
+// load_num、alarm模式：若15秒内无按键输入，自动切换回clock模式
 // 由于 LOAd 的显示，实际在置数页面只能显示约14秒
-parameter COUNTER_16S_TIME = 16;     // 长按时间16秒
-reg [$clog2(COUNTER_16S_TIME)-1:0]  counter_16s = 0;
-localparam COUNTER_16S_COUNT = COUNTER_16S_TIME - 1;      // 16秒计数值
+parameter COUNTER_15S_TIME = 15;     // 长按时间15秒
+reg [$clog2(COUNTER_15S_TIME)-1:0]  counter_15s = 0;
+localparam COUNTER_15S_COUNT = COUNTER_15S_TIME;      // 15秒计数值
+// ⚠踩坑警示：这里时间=走过的间隔数=计数值，值域0~15含16个状态但只递增15次=15秒；
+// 计数器counter的0是有效状态，循环一圈(0→9→0)才算满，此处0只是起点不占时间，故COUNT=TIME=15，不是"16个数"。
+
 //采用跳沿检测按键输入变化
 reg [2:0]   button_prev=3'b111;      //记录输入信号之前的值（num_up、num_down、choose），按系统时钟更新
 wire[2:0]   button_now;
@@ -357,8 +360,8 @@ begin
             ns = MODE_ALARM;
         else if(load_s_pulse==1'b1&&load_l_pulse==1'b0) //load长按确认置数，之后切换为时钟模式
             ns = MODE_CLOCK;
-        // 16秒无按键输入即返回clock，计时逻辑在第三段状态机里
-        else if(button_now == button_prev && counter_16s >= COUNTER_16S_COUNT)
+        // 15秒无按键输入即返回clock，计时逻辑在第三段状态机里
+        else if(button_now == button_prev && counter_15s >= COUNTER_15S_COUNT)
             ns = MODE_CLOCK;
         else
             ns = MODE_LOAD;
@@ -466,20 +469,20 @@ begin
             
             
             if(load_s_pulse==1'b0&&load_l_pulse==1'b1)//load短按，切换为闹钟模式，停止计时
-                counter_16s <= 0;
+                counter_15s <= 0;
             else if(load_s_pulse==1'b1&&load_l_pulse==1'b0)//load长按确认置数，之后切换为时钟模式，停止计时
-                counter_16s <= 0;
+                counter_15s <= 0;
 
-            // 计时16秒无按键输入（检测load之外的按键）即返回clock
+            // 计时15秒无按键输入（检测load之外的按键）即返回clock
             else if(button_now != button_prev)       
-                counter_16s <= 0;           
-            else if(button_now == button_prev && counter_16s < COUNTER_16S_COUNT)begin
-                if (pulse_1s) counter_16s <= counter_16s + 1'b1;
+                counter_15s <= 0;           
+            else if(button_now == button_prev && counter_15s < COUNTER_15S_COUNT)begin
+                if (pulse_1s) counter_15s <= counter_15s + 1'b1;
             end // 这里的begin-end必须加，否则下一行的else就会匹配if(pulse_1s)而不会匹配正确的if
-            else if(button_now == button_prev && counter_16s >= COUNTER_16S_COUNT)
-                counter_16s <= 0;
+            else if(button_now == button_prev && counter_15s >= COUNTER_15S_COUNT)
+                counter_15s <= 0;
             else
-                counter_16s <= counter_16s;
+                counter_15s <= counter_15s;
         
         end
         

@@ -7,7 +7,7 @@
 // =============================================================================
 // 
 module reset_sync (
-    input  wire sys_clk,         // PLL输出的稳定时钟
+    input  wire sys_clk,     // 系统时钟
     input  wire key_rst_n,   // 外部按键复位，低有效（直接来自I/O引脚）
     input  wire pll_locked,  // PLL锁定信号
     output reg  sys_rst_n    // 给全系统用的同步复位，低有效

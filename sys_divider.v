@@ -8,7 +8,7 @@
 //   pulse_1ms : 每1ms输出一个宽度为1个sys_clk周期（20ns）的高脉冲
 //               → 用途：按键消抖计数使能、模式超时计数（counter_16s）使能
 //   pulse_1s  : 每1s输出一个宽度为1个sys_clk周期（20ns）的高脉冲
-//               → 用途：驱动 counter_time 走时
+//               → 用途：驱动 counter 走时
 //   sec_clk   : 1Hz，50%占空比时钟
 //               → 用途：seg_dynamic 小数点闪烁
 //

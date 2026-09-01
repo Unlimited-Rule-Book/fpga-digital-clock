@@ -2,7 +2,7 @@
 // 文件名：beep_song.v
 // 功能：蜂鸣器乐曲播放模块，基于 RAM IP 核 + PWM 分频
 //
-// 乐谱数据：qifengle.mif — 《起风了》乐谱，初始化到 my_ram IP 核
+// 乐谱数据：qifengle.mif — 《起风了》 your_new_home.mif-神奇数字马戏团主题曲-认清现实的小曲儿 乐谱，初始化到 my_ram IP 核
 //
 // RAM 数据编码（每12位，地址空间 256 字节）：
 //   bit[11:8] — 八度（3=Oct3, 4=Oct4, 5=Oct5, 0=休止, F=结束标记）
@@ -20,7 +20,7 @@
 //   6. beep_en 低电平期间指针和计数器全部归零，下次使能后从头播放
 //
 // 节拍参数：
-//   BPM = 80，这个根据音乐的情绪定，就跟节拍器一样，一拍 = 十六分音符，PAI = 16
+//   示例：BPM = 80，这个根据音乐的情绪定，就跟节拍器一样，一拍 = 十六分音符，PAI = 16
 //   四分音符 = 4 拍，二分音符 = 8 拍，依此类推
 //
 // 注意：
@@ -132,7 +132,7 @@ always@(posedge sys_clk)
 begin   // 暂定为 beep_en 使能不断就一直播放
     if(~rst_n)
         rd_addr <= 0;
-    else if(rd_data[11:4]==8'hFF && beep_en)    // 遇到休止符，将指针归零
+    else if(rd_data[11:4]==8'hFF && beep_en)    // 遇到结束标记，将指针归零
         rd_addr <= 0;
     else if(cnt_dur==cnt_dur_max && beep_en)
         rd_addr <= rd_addr+1'b1;

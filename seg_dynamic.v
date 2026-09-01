@@ -118,28 +118,7 @@ begin
     end
 end
 
-/*老旧方案：
-  通过 sec_clk（1Hz，50%占空比）的跳变沿检测实现1s闪烁。
-  point_en 在每次跳变时翻转，控制 point_disp 的最终输出。*/
 //数码管数据显示，小数点以1s为周期闪烁
-// // // always@(posedge sys_clk)
-// // // begin
-    // // // if(~rst_n)
-        // // // point_en <= 1'b1;
-    // // // else if(sec_clk != sec_clk_prev)
-        // // // point_en <= ~point_en;
-    // // // else
-        // // // point_en <= point_en;
-// // // end
-// // // //但是sec_clk为边沿触发而非电平触发，
-// // // //所以需要定义锁存器sec_clk_prev记录sec_clk上一时刻的状态
-// // // always@(posedge sys_clk)
-// // // begin
-    // // // if(~rst_n)
-        // // // sec_clk_prev <= 1'b1;
-    // // // else
-        // // // sec_clk_prev <= sec_clk;
-// // // end
 //point_disp:为了增强可读性，也为了使对小数点的操作更加灵活，设置小数点寄存器，低电平点亮，所以需要对输入信号取反
 always@(posedge sys_clk)
 begin

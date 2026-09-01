@@ -97,13 +97,21 @@ always @(posedge sys_clk) begin
         button_debounced <= 1'b1;
     end
     else begin        
-       if (button_sync != button_debounced) begin   // 按键状态变化
-           if (debounce_counter >= DEBOUNCE_CNT_MAX) begin
-               button_debounced <= button_sync;    // 更新消抖后状态
-               debounce_counter <= 0;
-           end
-           else if (pulse_1ms)
-               debounce_counter <= debounce_counter + 1'b1;
+        if (button_sync != button_debounced) begin   // 按键状态变化
+            if(pulse_1ms)begin
+                if(debounce_counter >= DEBOUNCE_CNT_MAX) begin
+                    button_debounced <= button_sync;    // 更新消抖后状态
+                    debounce_counter <= 0;
+                end
+                else
+                    debounce_counter <= debounce_counter + 1'b1;
+            end
+           // if (debounce_counter >= DEBOUNCE_CNT_MAX) begin
+               // button_debounced <= button_sync;    // 更新消抖后状态
+               // debounce_counter <= 0;
+           // end
+           // else if (pulse_1ms)
+               // debounce_counter <= debounce_counter + 1'b1;
         end
         else 
             debounce_counter <= 0;
@@ -131,7 +139,7 @@ always @(posedge sys_clk) begin
     else begin
         button_debounced_prev <= button_debounced;
         if (button_debounced==1'b0)begin    // 按键按下（低电平）
-            short_counter <= 5'd0;   // 每次按下时清零short_counter，防止上次残留值影响本次短按脉冲宽度
+            short_counter <= 0;   // 每次按下时清零short_counter，防止上次残留值影响本次短按脉冲宽度
             if (press_counter < SHORT_END_CNT_MAX)begin
                 if (pulse_1ms)press_counter <= press_counter + 1'b1;
                 short_press <= 1'b1;     // 未达到0.5秒，且按键未抬起，不触发短按长按

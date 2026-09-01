@@ -86,6 +86,16 @@
 //   clock、load_num、alarm、beep_song、
 //   seg_dynamic（6位8段数码管动态扫描）、hc595_ctrl（74HC595串行输出驱动）
 // =============================================================================
+
+// 踩坑总结
+/* 【进制权移交】
+ counter 的小时个位进制 hour_radix，在"被置数"的瞬间必须交给"被装载的值"决定，而不是"计数器当前值"：
+   · clock   ：置数时按 data_hour 判（而非 out_hour），load 延时一拍为 load_d 再给 counter；
+   · load_num：进入置数页时按 before_hour 判（而非遗留的 load_hour），load_before 延时一拍为 load_before_d；
+   · alarm   ：进入编辑时按 view_num 判（而非 edit_hour），用 choose_edit_delay 延时一拍。
+ 三处同源：置数瞬间，进制权要从旧值移交给新值，且时序上要先更新进制、后置数。
+ */
+
 module clock_mode               //时钟的顶层封装模块：模式调整
 (
 //  ------  顶层入口（直接连接）  ------  
@@ -569,184 +579,7 @@ begin
 end
 
 
-/*
-// 原状态机
-always@(posedge sys_clk)
-begin
-    if(!rst_n)begin
-        MODE <= MODE_CLOCK;
-        counter_16s <= 0;
-        // 使能控制
-        mode_load_en <= 1'b0;
-        mode_alarm_en <= 1'b0;
-        // 输入控制
-        load_clock       <= 1'b1;
-        choose_load_num  <= 1'b1;
-        num_up_load_num  <= 1'b1;
-        num_down_load_num<= 1'b1;
-        choose_alarm     <= 1'b1;
-        choose_edit_alarm<= 1'b1;
-        num_up_alarm     <= 1'b1;
-        num_down_alarm   <= 1'b1;
-        load_confirm_alarm<= 1'b1;
-        load_alarm        <= 1'b1;
-        // 输出控制
-        disp_second <= disp_second_clock;
-        disp_minute <= disp_minute_clock;
-        disp_hour   <= disp_hour_clock  ;
-        disp_point  <= disp_point_clock ; 
-        disp_point_twinkle_en <= 1'b1;
-        
-    end
-    else begin
-        case(MODE)
-        MODE_CLOCK:
-        begin
-            // 使能控制
-            mode_load_en <= 1'b0;
-            mode_alarm_en <= 1'b0;
-            // 输入控制 load
-            load_clock       <= 1'b1;
-            choose_load_num  <= 1'b1;
-            num_up_load_num  <= 1'b1;
-            num_down_load_num<= 1'b1;
-            // 输入控制 alarm
-            choose_alarm     <= 1'b1;
-            choose_edit_alarm<= 1'b1;
-            num_up_alarm     <= 1'b1;
-            num_down_alarm   <= 1'b1;
-            load_confirm_alarm<= 1'b1;
-            load_alarm        <= 1'b1;
-            // 输出控制
-            disp_second <= disp_second_clock;
-            disp_minute <= disp_minute_clock;
-            disp_hour   <= disp_hour_clock  ;
-            disp_point  <= disp_point_clock ;
-            disp_point_twinkle_en <= 1'b1;
-            // 模式切换
-            if(~load_s_pulse)begin
-                MODE <= MODE_LOAD;
-            end
-            else begin
-                MODE <= MODE;
-            end
-        end
-        
-        MODE_LOAD:
-        begin
-            // 使能控制
-            mode_load_en <= 1'b1;
-            mode_alarm_en <= 1'b0;
-            // 输入控制 load
-            load_clock       <= load_l_pulse;
-            choose_load_num  <= choose_bs;
-            num_up_load_num  <= num_up_bs;
-            num_down_load_num<= num_down_bs;
-            // 输入控制 alarm
-            choose_alarm     <= 1'b1;
-            choose_edit_alarm<= 1'b1;
-            num_up_alarm     <= 1'b1;
-            num_down_alarm   <= 1'b1;
-            load_confirm_alarm<= 1'b1;
-            load_alarm        <= 1'b1;
-            //输出控制
-            disp_second <= disp_second_num;
-            disp_minute <= disp_minute_num;
-            disp_hour   <= disp_hour_num  ;
-            disp_point  <= disp_piont_num ;
-            disp_point_twinkle_en <= 1'b1;
-            // 模式切换
-            if(load_s_pulse==1'b0&&load_l_pulse==1'b1)begin//load短按，切换为闹钟模式
-                    counter_16s <= 0;
-                    MODE <= MODE_ALARM;
-            end
-            
-            else if(load_s_pulse==1'b1&&load_l_pulse==1'b0)begin//load长按，切换为时钟模式
-                    counter_16s <= 0;
-                    MODE <= MODE_CLOCK;
-            end            
-            
-            else if(button_now != button_prev)       
-                 counter_16s <= 0;           
-            else if(button_now == button_prev && counter_16s < COUNTER_16S_COUNT)begin
-                if (pulse_1s) counter_16s <= counter_16s + 1'b1;
-            end // 这里的begin-end必须加，否则下一行的else就会匹配if(pulse_1s)而不会匹配正确的if
-            else if(button_now == button_prev && counter_16s >= COUNTER_16S_COUNT)begin
-                counter_16s <= 0;
-                MODE <= MODE_CLOCK;
-            end
-            else begin
-                counter_16s <= counter_16s;
-                MODE <= MODE;
-            end
-        end
-        
-        MODE_ALARM:
-        begin
-            // 使能控制
-            mode_load_en <= 1'b0;
-            mode_alarm_en <= 1'b1;
-            // 输入控制 load
-            load_clock       <= 1'b1;
-            choose_load_num  <= 1'b1;
-            num_up_load_num  <= 1'b1;
-            num_down_load_num<= 1'b1;
-            // 输入控制 alarm
-            choose_alarm     <= choose_bs_s;
-            choose_edit_alarm<= choose_bs_l;
-            num_up_alarm     <= num_up_bs;
-            num_down_alarm   <= num_down_bs;
-            load_confirm_alarm<= load_l_pulse;
-            load_alarm        <= load_s_pulse;
-            //输出控制
-            disp_second <= disp_second_alarm;
-            disp_minute <= disp_minute_alarm;
-            disp_hour   <= disp_hour_alarm  ;
-            disp_point  <= disp_point_alarm ;
-            disp_point_twinkle_en <= 1'b0;
-            // 模式切换
-            if(alarm_view_en && load_s_pulse==1'b0)    // alarm 在 ALARM_VIEW 状态下，短按 load ，才切换回时钟模式
-                MODE <= MODE_CLOCK;
-            else
-                MODE <= MODE_ALARM;
-        end
 
-        default:    //default：时钟模式
-        begin
-            // 使能控制
-            mode_load_en <= 1'b0;
-            mode_alarm_en <= 1'b0;
-            // 输入控制 load
-            load_clock       <= 1'b1;
-            choose_load_num  <= 1'b1;
-            num_up_load_num  <= 1'b1;
-            num_down_load_num<= 1'b1;
-            // 输入控制 alarm
-            choose_alarm     <= 1'b1;
-            choose_edit_alarm<= 1'b1;
-            num_up_alarm     <= 1'b1;
-            num_down_alarm   <= 1'b1;
-            load_confirm_alarm<= 1'b1;
-            load_alarm        <= 1'b1;
-            // 输出控制
-            disp_second <= disp_second_clock;
-            disp_minute <= disp_minute_clock;
-            disp_hour   <= disp_hour_clock  ;
-            disp_point  <= disp_point_clock ;
-            disp_point_twinkle_en <= 1'b1;
-            // 模式切换
-            if(~load_s_pulse)begin
-                MODE <= MODE_LOAD;
-            end
-            else begin
-                MODE <= MODE;
-            end
-        end 
-            
-        endcase
-    end
-end
-*/
 
 
 

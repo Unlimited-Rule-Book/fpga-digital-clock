@@ -1,10 +1,12 @@
 // =============================================================================
 // 文件名：counter.v
-// 功能：通用BCD N进制加减计数器，支持多个counter级联，通过RCO_last、
+// 功能：通用 BCD N 进制加减计数器，支持多个 counter 级联，
+//       通过 RCO_last RCO 实现进位链连接，进而实现级联。
 //
-// 本模块被两处以不同方式复用：
-//   1. clock.v 中：sys_clk 为时钟，sec_pulse 为计数使能（走时模式）
-//   2. load_num.v 中：按键脉冲（hor_pulse等）直接作为时钟（手动调整模式）
+// 本模块被三处复用：
+//   1. clock.v 中：   sys_clk 为时钟，sec_pulse 为计数使能（走时模式）
+//   2. load_num.v 中：sys_clk 为时钟，按键脉冲（hor_pulse等）作为计数使能（手动调整模式）
+//   3. alarm.v 中：   sys_clk 为时钟，按键脉冲（hor_pulse等）作为计数使能（闹钟设置模式）
 //
 //
 // 计数规则：
@@ -22,7 +24,7 @@ input   wire    [3:0]   data_radix, // 计数器在计到哪一个数时同步�
 input   wire    RCO_last,           // 前一位（前一个counter模块）的进位信号RCO（最低位固定接1'b1）
 input   wire    point_in,           // 需要输出小数点，则置高电平
 input   wire    mode,               // mode=0为加计数，mode=1为减计数
-output  reg     [3:0]   out_counter,// 为数码管设计，设为4位即可==============================================
+output  reg     [3:0]   out_counter,// 为数码管设计，设为4位即可
 output  wire    RCO,                // 接下一个模块（）下一个counter）的RCO_last
 output  wire    point_out_counter   // 输出小数点
 );

@@ -12,7 +12,7 @@
 //
 // 与 clock 的区别（counter模块的使用）：
 //   clock 中 counter 以 sec_pulse 为使能信号（每秒计一次，用于走时）
-//   load_num 中 counter 以按键脉冲（hor_pulse/min_pulse/sec_pulse）为时钟
+//   load_num 中 counter 以按键脉冲（hor_pulse/min_pulse/sec_pulse）为使能
 //   （每次按键产生一个脉冲，计数器响应该脉冲直接计一次，用于手动调整）
 //
 //  状态机说明：
@@ -41,11 +41,11 @@ input   wire    [7:0]   before_hour,    // 在时间置数中为当前时间，�
 
 output  reg     [7:0]   data_second,    // 作用是把用户设置的数字输出到clock-counter的置数端口，完成同步置数
 output  reg     [7:0]   data_minute,    // 在顶层模块中与 clock 的 data_* 输入口连接
-output  reg     [7:0]   data_hour,      // 赋值逻辑在底部===================================================
+output  reg     [7:0]   data_hour,      // 赋值逻辑在底部==========
 output  wire    [7:0]   disp_second,    // 置数模式下，数码管的显示
 output  wire    [7:0]   disp_minute,    // 涵盖 LOAd 、置数值的显示
 output  wire    [7:0]   disp_hour  ,    // 赋值逻辑在 data_* 的上方
-output  wire    [5:0]   point_out       // 既然是要控制数码管的显示，那就得加上小数点了=====================
+output  wire    [5:0]   point_out       // 既然是要控制数码管的显示，那就得加上小数点了
 
 );
 
@@ -59,7 +59,7 @@ reg [1:0]   current_load = LOAD_IDLE;
 //定义置数使能信号
 reg set_en = 1'b0;
 
-//定义SHOW状态数码管显示的字符，这些在末尾实例化seg_dymanic时才会用到
+//定义SHOW状态数码管显示的字符，这些在末尾对 disp_* point_out 赋值时才会用到
 localparam  SHOW_EMPTY = 4'd14;  //全空，与seg_dynamic中的设定有关，既用于“ LOAd ”左右两侧数码管的显示，也用于 LOAD_EDIT 状态下，被选中的数位闪烁的显示
 localparam  SHOW_L     = 4'd10;  //L，与seg_dynamic中的设定有关
 localparam  SHOW_O     = 4'd0 ;  //O，与seg_dynamic中的设定有关
@@ -425,7 +425,7 @@ counter sec0(sys_clk,sec_pulse,rst_n,load_before_d,before_second[3:0],4'b1001,  
 //  ====================  LOAD_EDIT编辑置数状态，时分秒闪烁显示状态机  ====================
 // 变量声明：twinkle、TWINKLE_HOUR等在上一个时分秒计数脉冲状态机，主要是这些变量受该状态机控制
 // 控制置数时的数字显示，当mode_en使能时，将当前时刻时钟的值赋予ready_*
-always@(posedge sys_clk)         // 状态机牛逼！！！
+always@(posedge sys_clk)
 begin
 if(!rst_n)begin
     ready_minute <= before_minute; 
@@ -471,7 +471,7 @@ assign  disp_minute = (mode_en && current_load==LOAD_SHOW) ? {SHOW_O, SHOW_A}   
 assign  disp_second = (mode_en && current_load==LOAD_SHOW) ? {SHOW_d, SHOW_EMPTY} : 
                       (mode_en && current_load==LOAD_EDIT) ? ready_second         :
                       8'hFF;                 
-assign point_out = load_piont;
+assign  point_out = load_piont;
 
 
 

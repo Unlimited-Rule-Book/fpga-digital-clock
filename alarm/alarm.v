@@ -51,7 +51,7 @@ input   wire    rst_n,
 input   wire    load,                   // 短按load，用于取消对某个闹钟的设置，在顶层与 load_s_pulse 相连接。
 input   wire    load_confirm,           // 长按load，用于确认对某个闹钟的设置，在顶层与 load_l_pulse 相连接
 input   wire    choose,
-input   wire    choose_edit,            // 长按choose，进入对某一个闹钟进行编辑的状态 // clock_mode 中变成脉冲===================================
+input   wire    choose_edit,            // 长按choose，进入对某一个闹钟进行编辑的状态 // 在 clock_mode 中已变成脉冲
 input   wire    num_up,
 input   wire    num_down,
 input   wire    [7:0]   now_second,
@@ -62,7 +62,7 @@ input   wire    alarm_beep_disp_en,
 output  wire    [7:0]   disp_state,     // 置数模式下，数码管的显示
 output  wire    [7:0]   disp_hour,      // 涵盖 LOAd 、置数值的显示
 output  wire    [7:0]   disp_minute,    // 赋值逻辑在 data_* 的上方
-output  wire    [5:0]   point_out,      // 既然是要控制数码管的显示，那就得加上小数点了=====================
+output  wire    [5:0]   point_out,      // 既然是要控制数码管的显示，那就得加上小数点了
 output  wire    alarm_view_en,          // 闹钟的状态在 ALARM_VIEW ,可以切换到其它模式。
 output  reg     alarm_ring_en           // 到了闹钟的时间，响铃
 );
@@ -139,7 +139,7 @@ reg set_en = 1'b0;
 assign alarm_view_en = view_en;
 //定义闹钟界面的字母显示
 localparam  SHOW_EMPTY   = 4'd14; // 全灭
-localparam  SHOW_DEFAULT = 4'd15; // 默认闹钟的时间是“符号
+localparam  SHOW_DEFAULT = 4'd15; // 默认闹钟的时间是“负号-”
 localparam  SHOW_d       = 4'd12; // d，表示闹钟未使能
 localparam  SHOW_E       = 4'd13; // E，表示闹钟使能了
 //状态机，控制数码管的显示
@@ -191,7 +191,7 @@ begin
 end
 
 // ALARM_VIEW 状态下浏览不同alarm
-// RAM 建模！！！
+// RAM 建模
 parameter  ALARM_CNT = 4;
 reg [16:0] memory [0:ALARM_CNT-1'b1];   // 一共有4个可设置闹钟，地址位宽为2；一共用17位，第一位表示是否使能，后16位为4个BCD编码表示要设置的小时、分钟，秒默认为0，后面把这个写死。
 reg [$clog2(ALARM_CNT)-1:0]  alarm_num;       // 闹钟的编号，也是地址线。
@@ -332,6 +332,9 @@ end
   
 
 //  ====================  六次实例化counter，并设计加减计数的小时个位进制动态显示  ====================
+// 用延时信号置数，是因为要让counter读到 由view_num判断得到 的进制
+reg choose_edit_delay = 1'b1;
+always@(posedge sys_clk)  choose_edit_delay <= choose_edit_pulse;
 //定义进位信号中间值
 wire    [5:0]   RCO_zhong;
 //定义置数中间值
@@ -429,8 +432,6 @@ begin
     else
         {min_radix1,min_radix0} <= 8'b0101_1001;
 end
-reg choose_edit_delay = 1'b1;
-always@(posedge sys_clk)  choose_edit_delay <= choose_edit_pulse;   // 用延时信号置数，是因为要让counter读到 由view_num判断得到 的进制
 
 // ALARM_EDIT 状态下的计数器
 // 在 用户长按 choose 即 choose_edit 低电平脉冲到来时，将用户要编辑的闹钟的时间 置数 到 counter ，进而输出到数码管。
@@ -450,11 +451,9 @@ assign  load_piont[5:4] = 1'b0; // state 两位不显示小数点
 //  ====================  ALARM_EDIT编辑置数状态，时分秒闪烁显示状态机  ====================
 // 变量声明：twinkle、TWINKLE_STATE等在上一个时分秒计数脉冲状态机，主要是这些变量受该状态机控制
 // 控制置数时的数字显示，当mode_en使能时，将当前时刻时钟的值赋予ready_*
-
-// 需要增加 ready_state ,去掉 ready_sec =================================================================================================
 wire    [7:0]   ready_state_show;       // 增强可读性
 assign  ready_state_show = {alarm_num_bcd, alarm_state_show(state_tmp)};
-always@(posedge sys_clk)         // 状态机牛逼！！！
+always@(posedge sys_clk)
 begin
 if(!rst_n)begin
     ready_state <= {SHOW_DEFAULT,SHOW_DEFAULT};
@@ -554,8 +553,6 @@ end
 
 
 // 数显控制，模式为LOAD_SHOW时，显示LOAd；模式为ALARM_EDIT时显示read_*；模式为ALARM_VIEW时显示为全显示（seg_dynamic编码，F 4'd15为全显示）
-
-// 需要增加 ready_state ,去掉 ready_sec =================================================================================================
 assign  disp_state  = (mode_en && current_alarm==ALARM_VIEW) ? {alarm_num_bcd, alarm_state_show(memory[alarm_num][16])} : 
                       (mode_en && current_alarm==ALARM_EDIT) ? ready_state      :
                       (~mode_en&& alarm_beep_disp_en)        ? beep_hour        :

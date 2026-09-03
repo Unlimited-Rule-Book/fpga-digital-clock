@@ -32,7 +32,7 @@
 // │  鸣响显示模式 │  短按 choose/num_up/   │  手动停止闹钟，返回时钟模式   │
 // │               │  num_down              │                               │
 // └────────────────────────────────────────────────────────────────────────┘
-// 注意：由于 LOAd要的显示1秒，故“15秒无操作返回”实际上在置数的数字编辑页面只能显示约14秒
+// 注意：由于 LOAd要显示1秒，故“15秒无操作返回”实际上在置数的数字编辑页面只能显示约14秒
 // 总结：load键：短按在不同模式之间切换，长按确认，
 //      所以短按load，是顶层信号；长按load，是子模块信号。前者是状态机的切换条件，后者是状态机内的控制信号！
 //
@@ -82,7 +82,7 @@
 //
 // 子模块实例：
 //   my_pll_divider（IP核）、sys_divider、
-//   button_stabilization（×3）、button_stabilization_long_short（×1）、
+//   btn_debounce ×4、 btn_duration ×2、
 //   clock、load_num、alarm、beep_song、
 //   seg_dynamic（6位8段数码管动态扫描）、hc595_ctrl（74HC595串行输出驱动）
 // =============================================================================
@@ -167,26 +167,27 @@ sys_divider clock_mode_divider
 wire    choose_bs;
 wire    num_up_bs;
 wire    num_down_bs; 
+wire    load_bs;
 // 按键消抖模块接口已改为pulse_1ms计数，参数单位为ms
-button_stabilization #(.DEBOUNCE_MS(20))        // 为了test bench从20ms改成2ms======================================================
-                        // DEBOUNCE_MS千万别改成1ms，在模块内部DEBOUNCE_CNT_MAX会变成0，导致1.消抖逻辑失效；2.debounce_counter的位宽会变成[-1,0]，被系统解析为1bit
-                        choose_b_s   (sys_clk, pulse_1ms, rst_n, choose, choose_bs),    // 这个 choose 是对 load_num 产生的，只有短按判定。
-                        num_up_b_s   (sys_clk, pulse_1ms, rst_n, num_up, num_up_bs),
-                        num_down_b_s (sys_clk, pulse_1ms, rst_n, num_down, num_down_bs);
+btn_debounce #(.DEBOUNCE_MS(20))
+                // DEBOUNCE_MS千万别改成1ms，在模块内部DEBOUNCE_CNT_MAX会变成0，导致1.消抖逻辑失效；2.debounce_counter的位宽会变成[-1,0]，被系统解析为1bit
+                choose_b_s   (sys_clk, pulse_1ms, rst_n, choose, choose_bs),    // 这个 choose 是对 load_num 产生的，只有短按判定。
+                num_up_b_s   (sys_clk, pulse_1ms, rst_n, num_up, num_up_bs),
+                num_down_b_s (sys_clk, pulse_1ms, rst_n, num_down, num_down_bs),
+                load_b_s     (sys_clk, pulse_1ms, rst_n, load, load_bs);
 // 按键消抖+短按检测（大于20ms小于500ms）+长按3秒检测  
 // 注意！！改变消抖时间和长短按时长，修改实例化时的参数即可，无需关心内部计数 
 // 从按键消抖模块中取出的长短按load
 wire    load_bs_s;                  // 短按信号其实对load_num模块没有直接作用！=====================================
 wire    load_bs_l;
 // 按键消抖+长短按模块接口已改为pulse_1ms计数，LONG_PRESS_MS单位为ms
-button_stabilization_long_short #(.DEBOUNCE_MS(20), .SHORT_END_MS(500), .LONG_PRESS_MS(3000)) // 为了test bench短按从20ms改成2ms，短按停止从500改成5，长按判定从3000改成7==============================================
-                                    // // DEBOUNCE_MS千万别改成1ms，在模块内部DEBOUNCE_CNT_MAX会变成0，导致1.消抖逻辑失效；2.NBA冲突，使得short_counter被持续拉高；3.debounce_counter的位宽会变成[-1,0]，被系统解析为1bit
+btn_duration #(.SHORT_END_MS(500), .LONG_PRESS_MS(3000))
 load_b_s_l_s    
 (
     .sys_clk        (sys_clk),    
     .pre_clk        (sys_clk_1mhz),  
     .rst_n          (rst_n),      
-    .button_in      (load),  
+    .button_in      (load_bs),  
     
     .short_press    (load_bs_s),
     .long_press     (load_bs_l) 
@@ -229,7 +230,7 @@ end
 // alarm 专供的 choose
 wire    choose_bs_s;
 wire    choose_bs_l;
-button_stabilization_long_short #(.DEBOUNCE_MS(20), .SHORT_END_MS(500), .LONG_PRESS_MS(3000))
+btn_duration #(.SHORT_END_MS(500), .LONG_PRESS_MS(3000))
 // DEBOUNCE_MS千万别改成1ms，在模块内部DEBOUNCE_CNT_MAX会变成0，导致1.消抖逻辑失效；2.NBA冲突，使得short_counter被持续拉高；
 // 3.debounce_counter的位宽会变成[-1,0]，被系统解析为1bit
 alarm_choose_bs_l_s    
@@ -237,7 +238,7 @@ alarm_choose_bs_l_s
     .sys_clk        (sys_clk),    
     .pre_clk        (sys_clk_1mhz),  
     .rst_n          (rst_n),      
-    .button_in      (choose),  
+    .button_in      (choose_bs),  
     
     .short_press    (choose_bs_s),
     .long_press     (choose_bs_l) 
@@ -316,7 +317,6 @@ localparam  MODE_LOAD  = 2'b01;
 localparam  MODE_ALARM = 2'b10;
 localparam  MODE_BEEP  = 2'b11;
 //定义状态机
-// // // // // reg [1:0]   MODE = MODE_CLOCK;//==============================================可删除
 reg [1:0]   cs, ns;
 
 

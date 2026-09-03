@@ -44,8 +44,7 @@ module sys_divider #(
 
     
     reg [$clog2(_1MS_CNT)-1:0]      ms_cnt;     // 10位1毫秒（秒低位）计数器
-    reg [$clog2(_1S_HALF_MAX)-1:0]  sec_cnt;    // 10位1秒（秒高位）计数器
- // 两个10位计数器级联，输出两个flag信号，一共20位计数器相比50MHz的27位节省7个FF   
+    reg [$clog2(_1S_HALF_MAX)-1:0]  sec_cnt;    // 10位1秒（秒高位）计数器  
     reg ms_flag;        // 每毫秒 翻转 一次，用于跨时钟域传递
     reg sec_flag;       // 每秒 toggle 一次，用于跨时钟域传递
     

@@ -28,7 +28,7 @@
 // 但是在开发load_num模块时，seg_dynamic、hc595_ctrl被集中到了顶层模块，与load_num共用
 // 所以clock、与counter_time就重复了，于是删去了counter_time
 // =============================================================================
-module clock                // 时钟的顶层封装模块
+module clock
 (
 input   wire    sys_clk,    // 全局时钟，50MHz晶振
 input   wire    sec_pulse,  // 1Hz秒脉冲,用于驱动计数器，来自sys_divider的pulse_1s

@@ -32,7 +32,7 @@
 // │  鸣响显示模式 │  短按 choose/num_up/   │  手动停止闹钟，返回时钟模式   │
 // │               │  num_down              │                               │
 // └────────────────────────────────────────────────────────────────────────┘
-// 注意：由于 LOAd要显示1秒，故“15秒无操作返回”实际上在置数的数字编辑页面只能显示约14秒
+// 注意：由于 LOAd 需显示1秒，故“15秒无操作返回”实际上在置数的数字编辑页面只能显示约14秒
 // 总结：load键：短按在不同模式之间切换，长按确认，
 //      所以短按load，是顶层信号；长按load，是子模块信号。前者是状态机的切换条件，后者是状态机内的控制信号！
 //
@@ -89,7 +89,7 @@
 
 // 踩坑总结
 /* 【进制权移交】
- counter 的小时个位进制 hour_radix，在"被置数"的瞬间必须交给"被装载的值"决定，而不是"计数器当前值"：
+ counter 的小时个位进制 radix_hour ，在"被置数"的瞬间必须交给"被装载的值"决定，而不是"计数器当前值"：
    · clock   ：置数时按 data_hour 判（而非 out_hour），load 延时一拍为 load_d 再给 counter；
    · load_num：进入置数页时按 before_hour 判（而非遗留的 load_hour），load_before 延时一拍为 load_before_d；
    · alarm   ：进入编辑时按 view_num 判（而非 edit_hour），用 choose_edit_delay 延时一拍。
@@ -98,7 +98,6 @@
 
 module clock_mode               //时钟的顶层封装模块：模式调整
 (
-//  ------  顶层入口（直接连接）  ------  
 input   wire    sys_clk,        //全局时钟，50MHz
 input   wire    rst_n_input,      //复位信号
 input   wire    load,       //置数信号
@@ -119,7 +118,7 @@ output  wire    oe
 wire sys_clk_1mhz;
 wire locked_sig;
 // 系统时钟PLL输出1MHz
-my_pll_divider	my_pll_divider_inst (
+my_pll_divider	clock_mode_my_pll_divider (
 	.areset ( 1'b0 ),      // 我的系统复位低有效，而PLL复位高有效，所以这里填0。另外， PLL 的复位不应受外部reset按键控制，其复位进上电时自动复位，故areset连接成无效。
 	.inclk0 ( sys_clk ),
     
@@ -146,14 +145,14 @@ reset_sync clock_mode_reset_sync
 wire pulse_1ms;
 wire pulse_1s;
 wire sec_clk;
-sys_divider clock_mode_divider
+sys_divider clock_mode_sys_divider
 (
     .sys_clk  (sys_clk      ),
     .pre_clk  (sys_clk_1mhz ),
     .rst_n    (rst_n        ),
     
     .pulse_1ms(pulse_1ms    ),
-    .pulse_1s (pulse_1s     ),   // → clock-counter_time-counter的使能时钟
+    .pulse_1s (pulse_1s     ),   // → clock-counter的使能时钟
     .sec_clk  (sec_clk      )    // → clock里小数点和load_num置数和显示load几个字时用
 
 );
@@ -164,84 +163,82 @@ sys_divider clock_mode_divider
 //  ====================  实例化按键消抖、按键消抖长短按模块  ====================
 // 按键消抖（短按）
 // 注意！！改变消抖时间，修改实例化时的参数即可，无需关心内部计数
-wire    choose_bs;
-wire    num_up_bs;
-wire    num_down_bs; 
-wire    load_bs;
+wire    choose_db;
+wire    num_up_db;
+wire    num_down_db; 
+wire    load_db;
 // 按键消抖模块接口已改为pulse_1ms计数，参数单位为ms
 btn_debounce #(.DEBOUNCE_MS(20))
-                // DEBOUNCE_MS千万别改成1ms，在模块内部DEBOUNCE_CNT_MAX会变成0，导致1.消抖逻辑失效；2.debounce_counter的位宽会变成[-1,0]，被系统解析为1bit
-                choose_b_s   (sys_clk, pulse_1ms, rst_n, choose, choose_bs),    // 这个 choose 是对 load_num 产生的，只有短按判定。
-                num_up_b_s   (sys_clk, pulse_1ms, rst_n, num_up, num_up_bs),
-                num_down_b_s (sys_clk, pulse_1ms, rst_n, num_down, num_down_bs),
-                load_b_s     (sys_clk, pulse_1ms, rst_n, load, load_bs);
+    // DEBOUNCE_MS不可设为1ms，否则在模块内部DEBOUNCE_CNT_MAX会变成0，导致1.消抖逻辑失效；2.debounce_counter的位宽会变成[-1,0]，被系统解析为1bit
+    clock_mode_btn_debounce_choose   (sys_clk, pulse_1ms, rst_n, choose, choose_db),    // 这个 choose 是对 load_num 产生的，只有短按判定。
+    clock_mode_btn_debounce_num_up   (sys_clk, pulse_1ms, rst_n, num_up, num_up_db),
+    clock_mode_btn_debounce_num_down (sys_clk, pulse_1ms, rst_n, num_down, num_down_db),
+    clock_mode_btn_debounce_load     (sys_clk, pulse_1ms, rst_n, load, load_db);
 // 按键消抖+短按检测（大于20ms小于500ms）+长按3秒检测  
 // 注意！！改变消抖时间和长短按时长，修改实例化时的参数即可，无需关心内部计数 
 // 从按键消抖模块中取出的长短按load
-wire    load_bs_s;                  // 短按信号其实对load_num模块没有直接作用！=====================================
-wire    load_bs_l;
+wire    load_short;
+wire    load_long;
 // 按键消抖+长短按模块接口已改为pulse_1ms计数，LONG_PRESS_MS单位为ms
 btn_duration #(.SHORT_END_MS(500), .LONG_PRESS_MS(3000))
-load_b_s_l_s    
+clock_mode_btn_duration_load    
 (
     .sys_clk        (sys_clk),    
     .pre_clk        (sys_clk_1mhz),  
     .rst_n          (rst_n),      
-    .button_in      (load_bs),  
+    .button_in      (load_db),  
     
-    .short_press    (load_bs_s),
-    .long_press     (load_bs_l) 
+    .short_press    (load_short),
+    .long_press     (load_long) 
 );
 // 长短按load脉冲         
-reg     load_s_pulse;
-reg     load_l_pulse;
+reg     load_short_pulse;
+reg     load_long_pulse;
 // 记录上次长短按信号，以便产生脉冲
-reg    load_bs_s_prev;
-reg    load_bs_l_prev;
+reg    load_short_prev;
+reg    load_long_prev;
 // 长短按load脉冲产生                    
 always@(posedge sys_clk) begin
     if(!rst_n)begin
-        load_s_pulse <= 1'b1;
-        load_bs_s_prev <= 1'b1;
+        load_short_pulse <= 1'b1;
+        load_short_prev <= 1'b1;
     end
-    else if(load_bs_s_prev==1'b1 && load_bs_s==1'b0)begin
-        load_s_pulse <= 1'b0;
-        load_bs_s_prev <= load_bs_s;
+    else if(load_short_prev==1'b1 && load_short==1'b0)begin
+        load_short_pulse <= 1'b0;
+        load_short_prev <= load_short;
     end
     else begin
-        load_s_pulse <= 1'b1;
-        load_bs_s_prev <= load_bs_s;
+        load_short_pulse <= 1'b1;
+        load_short_prev <= load_short;
     end
 end
 always@(posedge sys_clk) begin
     if(!rst_n)begin
-        load_l_pulse <= 1'b1;
-        load_bs_l_prev <= 1'b1;
+        load_long_pulse <= 1'b1;
+        load_long_prev <= 1'b1;
     end
-    else if(load_bs_l_prev==1'b1 && load_bs_l==1'b0)begin
-        load_l_pulse <= 1'b0;
-        load_bs_l_prev <= load_bs_l;
+    else if(load_long_prev==1'b1 && load_long==1'b0)begin
+        load_long_pulse <= 1'b0;
+        load_long_prev <= load_long;
     end
     else begin
-        load_l_pulse <= 1'b1;
-        load_bs_l_prev <= load_bs_l;
+        load_long_pulse <= 1'b1;
+        load_long_prev <= load_long;
     end
 end
 // alarm 专供的 choose
-wire    choose_bs_s;
-wire    choose_bs_l;
+wire    choose_short;
+wire    choose_long;
 btn_duration #(.SHORT_END_MS(500), .LONG_PRESS_MS(3000))
-// DEBOUNCE_MS千万别改成1ms，在模块内部DEBOUNCE_CNT_MAX会变成0，导致1.消抖逻辑失效；2.NBA冲突，使得short_counter被持续拉高；
-// 3.debounce_counter的位宽会变成[-1,0]，被系统解析为1bit
-alarm_choose_bs_l_s    
+clock_mode_btn_duration_choose    
 (
     .sys_clk        (sys_clk),    
     .pre_clk        (sys_clk_1mhz),  
     .rst_n          (rst_n),      
-    .button_in      (choose_bs),  
+    .button_in      (choose_db),  
     
-    .short_press    (choose_bs_s),
-    .long_press     (choose_bs_l) 
+    .short_press    (choose_short),
+    .long_press     (choose_long) 
 );
 
 
@@ -258,7 +255,7 @@ alarm_choose_bs_l_s
   系统模式切换回CLOCK（非置数模式）
 */
 
-////对状态进行选择//-----------------------单按load选择时钟、置数、闹钟模式，长按确认置数、闹钟的输入---------------
+// 对状态进行选择 单按load选择时钟、置数、闹钟模式，长按确认置数、闹钟的输入
 
 // 置数模式、闹钟模式使能信号，时钟模式不需要
 reg mode_load_en = 1'b0;
@@ -267,7 +264,7 @@ reg mode_alarm_en = 1'b0;
 // 输入控制
 // 时钟模式
 // 不论前面发现的bug：load_num中，data_hour等的更新与clock-counter加载置数值在同一个时钟沿，在同步时钟下，counter读到的是沿前值，所以要对load_clock延时一个周期
-// 还是后来发现的bug：即使在 clock 模式下，长按 load 也会发生置数，问题就在于 load_l_pulse 信号在任何状态均生效！
+// 还是后来发现的bug：即使在 clock 模式下，长按 load 也会发生置数，问题就在于 load_long_pulse 信号在任何状态均生效！
 // 都是因为没有将长按load的信号放进状态机！
 // 短按load，是顶层信号；长按load，是子模块信号。
 reg     load_clock;
@@ -275,7 +272,7 @@ reg     load_clock;
 reg     choose_load_num  ;
 reg     num_up_load_num  ;
 reg     num_down_load_num;
-// 闹钟模式========================================================================
+// 闹钟模式
 reg     choose_alarm;
 reg     choose_edit_alarm;
 reg     num_up_alarm;
@@ -294,8 +291,8 @@ wire    [5:0]   disp_point_clock ;
 wire    [7:0]   disp_second_num;
 wire    [7:0]   disp_minute_num;
 wire    [7:0]   disp_hour_num  ;
-wire    [5:0]   disp_piont_num ; 
-// 闹钟模式========================================================================
+wire    [5:0]   disp_point_num ; 
+// 闹钟模式
 wire    [7:0]   disp_second_alarm;
 wire    [7:0]   disp_minute_alarm;
 wire    [7:0]   disp_hour_alarm  ;
@@ -322,17 +319,17 @@ reg [1:0]   cs, ns;
 
 // load_num、alarm模式：若15秒内无按键输入，自动切换回clock模式
 // 由于 LOAd 的显示，实际在置数页面只能显示约14秒
-parameter COUNTER_15S_TIME = 15;     // 长按时间15秒
+parameter COUNTER_15S_TIME = 15;     // 超时时间15秒
 reg [$clog2(COUNTER_15S_TIME)-1:0]  counter_15s = 0;
 localparam COUNTER_15S_COUNT = COUNTER_15S_TIME;      // 15秒计数值
-// ⚠踩坑警示：这里时间=走过的间隔数=计数值，值域0~15含16个状态但只递增15次=15秒；
+// ⚠ 踩坑警示：这里时间=走过的间隔数=计数值，值域0~15含16个状态但只递增15次=15秒；
 // 计数器counter的0是有效状态，循环一圈(0→9→0)才算满，此处0只是起点不占时间，故COUNT=TIME=15，不是"16个数"。
 
 //采用跳沿检测按键输入变化
 reg [2:0]   button_prev=3'b111;      //记录输入信号之前的值（num_up、num_down、choose），按系统时钟更新
 wire[2:0]   button_now;
-assign      button_now={choose_bs,num_up_bs,num_down_bs};//现在的值，实时更新
-always@(posedge sys_clk) button_prev <= {choose_bs,num_up_bs,num_down_bs};
+assign      button_now={choose_db,num_up_db,num_down_db};//现在的值，实时更新
+always@(posedge sys_clk) button_prev <= {choose_db,num_up_db,num_down_db};
 //检测按键变化的功能在后面也有作用：用于将闹钟关掉
 
 // alarm 在 ALARM_VIEW 状态下，短按 load ，才切换回时钟模式
@@ -357,7 +354,7 @@ always@(*)
 begin
     case(cs)
     MODE_CLOCK: begin
-        if(~load_s_pulse)
+        if(~load_short_pulse)
             ns = MODE_LOAD;
         else if(beep_en)  // 仅在clock模式下，出现闹钟使能信号后，才会切换到 MODE_BEEP 的显示
             ns = MODE_BEEP;
@@ -366,9 +363,9 @@ begin
     end
         
     MODE_LOAD: begin
-        if(load_s_pulse==1'b0&&load_l_pulse==1'b1)      //load短按，切换为闹钟模式
+        if(load_short_pulse==1'b0&&load_long_pulse==1'b1)      //load短按，切换为闹钟模式
             ns = MODE_ALARM;
-        else if(load_s_pulse==1'b1&&load_l_pulse==1'b0) //load长按确认置数，之后切换为时钟模式
+        else if(load_short_pulse==1'b1&&load_long_pulse==1'b0) //load长按确认置数，之后切换为时钟模式
             ns = MODE_CLOCK;
         // 15秒无按键输入即返回clock，计时逻辑在第三段状态机里
         else if(button_now == button_prev && counter_15s >= COUNTER_15S_COUNT)
@@ -378,7 +375,7 @@ begin
     end
         
     MODE_ALARM: begin
-        if(alarm_view_en && load_s_pulse==1'b0)    // alarm 在 ALARM_VIEW 状态下，短按 load ，才切换回时钟模式
+        if(alarm_view_en && load_short_pulse==1'b0)    // alarm 在 ALARM_VIEW 状态下，短按 load ，才切换回时钟模式
             ns = MODE_CLOCK;
         else
             ns = MODE_ALARM;
@@ -458,10 +455,10 @@ begin
             mode_load_en <= 1'b1;
             mode_alarm_en <= 1'b0;
             // 输入控制 load
-            load_clock       <= load_l_pulse;
-            choose_load_num  <= choose_bs;
-            num_up_load_num  <= num_up_bs;
-            num_down_load_num<= num_down_bs;
+            load_clock       <= load_long_pulse;
+            choose_load_num  <= choose_db;
+            num_up_load_num  <= num_up_db;
+            num_down_load_num<= num_down_db;
             // 输入控制 alarm
             choose_alarm     <= 1'b1;
             choose_edit_alarm<= 1'b1;
@@ -473,14 +470,14 @@ begin
             disp_second <= disp_second_num;
             disp_minute <= disp_minute_num;
             disp_hour   <= disp_hour_num  ;
-            disp_point  <= disp_piont_num ;
+            disp_point  <= disp_point_num ;
             disp_point_twinkle_en <= 1'b1;
             alarm_beep_disp_en    <= 1'b0;
             
             
-            if(load_s_pulse==1'b0&&load_l_pulse==1'b1)//load短按，切换为闹钟模式，停止计时
+            if(load_short_pulse==1'b0&&load_long_pulse==1'b1)//load短按，切换为闹钟模式，停止计时
                 counter_15s <= 0;
-            else if(load_s_pulse==1'b1&&load_l_pulse==1'b0)//load长按确认置数，之后切换为时钟模式，停止计时
+            else if(load_short_pulse==1'b1&&load_long_pulse==1'b0)//load长按确认置数，之后切换为时钟模式，停止计时
                 counter_15s <= 0;
 
             // 计时15秒无按键输入（检测load之外的按键）即返回clock
@@ -507,12 +504,12 @@ begin
             num_up_load_num  <= 1'b1;
             num_down_load_num<= 1'b1;
             // 输入控制 alarm
-            choose_alarm     <= choose_bs_s;
-            choose_edit_alarm<= choose_bs_l;
-            num_up_alarm     <= num_up_bs;
-            num_down_alarm   <= num_down_bs;
-            load_confirm_alarm<= load_l_pulse;
-            load_alarm        <= load_s_pulse;
+            choose_alarm     <= choose_short;
+            choose_edit_alarm<= choose_long;
+            num_up_alarm     <= num_up_db;
+            num_down_alarm   <= num_down_db;
+            load_confirm_alarm<= load_long_pulse;
+            load_alarm        <= load_short_pulse;
             //输出控制
             disp_second <= disp_second_alarm;
             disp_minute <= disp_minute_alarm;
@@ -584,7 +581,7 @@ end
 
 
 //  ====================  clock、load_num、alarm三大模块及鸣响beep_song模块实例化  ====================
-//时钟模式----实例化==========================================================================
+//时钟模式实例化
 wire    [7:0]   data_second;
 wire    [7:0]   data_minute;   
 wire    [7:0]   data_hour;   
@@ -601,14 +598,14 @@ clock   clock_mode_clock
     .out_second (disp_second_clock),
     .out_minute (disp_minute_clock),
     .out_hour   (disp_hour_clock  ),
-    .point_out  (disp_point_clock )//=============================
+    .point_out  (disp_point_clock )
 );
 
 
 //置数模式
-/* 注意：不可以将 load_confirm 信号加入状态机进行控制！ load_l_pulse 必须直接连接 load_confirm 
-因为在 load_num 末尾，data_* 在 load_confirm 即 load_l_pulse 下降沿更新（被 load_* 赋值）
-load_clock 经状态机，也是在 load_l_pulse 下降沿更新，故二者同拍更新
+/* 注意：不可以将 load_confirm 信号加入状态机进行控制！ load_long_pulse 必须直接连接 load_confirm 
+因为在 load_num 末尾，data_* 在 load_confirm 即 load_long_pulse 下降沿更新（被 load_* 赋值）
+load_clock 经状态机，也是在 load_long_pulse 下降沿更新，故二者同拍更新
 下一拍， clock 就能因 load_clock 的低电平而读取已更新的 data_* ，读取正确。
 一旦输入 load_confirm 的信号进入状态机， data_* 更新的时间就比 load_clock 晚一拍，
 clock 读取到旧值，时钟数据紊乱！
@@ -619,14 +616,14 @@ load_num    clock_mode_load_num
     .sys_clk        (sys_clk   ),
     .sec_clk        (sec_clk   ),
     .rst_n          (rst_n     ),
-    .load_confirm   (load_l_pulse ),       // 直接连接 load_l_pulse !!! 原因见上
+    .load_confirm   (load_long_pulse ),       // 直接连接 load_long_pulse !!! 原因见上
     .choose         (choose_load_num  ),
     .num_up         (num_up_load_num  ),
     .num_down       (num_down_load_num),
-    .before_second  (disp_second_clock),//---------------
-    .before_minute  (disp_minute_clock),//---------------
-    .before_hour    (disp_hour_clock  ),//---------------
-    // .point_out      (point_out    ),
+    .before_second  (disp_second_clock),
+    .before_minute  (disp_minute_clock),
+    .before_hour    (disp_hour_clock  ),
+    // .point_out      (point_out    ),     // 小数点输出在load_num 内部被固定，故不需要输入值，但还是留下接口
 
     .data_second    (data_second  ),
     .data_minute    (data_minute  ),
@@ -634,10 +631,10 @@ load_num    clock_mode_load_num
     .disp_second    (disp_second_num),
     .disp_minute    (disp_minute_num),
     .disp_hour      (disp_hour_num  ),
-    .point_out      (disp_piont_num)
+    .point_out      (disp_point_num)
 );
 
-//闹钟模式----实例化
+//闹钟模式实例化
 // alarm 模块输出：闹钟该响了的脉冲使能信号
 wire    alarm_ring_en;
 alarm       clock_mode_alarm
@@ -694,8 +691,6 @@ beep_song clock_mode_beep_song
     .sys_clk    (sys_clk),
     .rst_n      (rst_n),
     .beep_en    (beep_en),
-        // // .beep_en    (1'b1),   //   用于调试新乐曲
-
 
     .beep       (beep)
 );
@@ -705,10 +700,8 @@ beep_song clock_mode_beep_song
 //  ====================  seg_dynamic、hc595_ctrl实例化  ====================             
 wire    [5:0]   sel;                          
 wire    [7:0]   seg;
-////  ------  实例化子模块  ------  
-////按键消抖----------目前只有load需要消抖
 //数码管动态显示模块
-seg_dynamic     clock_seg_dynamic
+seg_dynamic     clock_mode_seg_dynamic
 (
    .sys_clk            (sys_clk   ),
    .pre_clk            (sys_clk_1mhz),   
@@ -725,7 +718,7 @@ seg_dynamic     clock_seg_dynamic
 );  
 
 //74HC595控制模块
-hc595_ctrl      clock_hc595_ctrl
+hc595_ctrl      clock_mode_hc595_ctrl
 (
    .sys_clk            (sys_clk),
    .rst_n              (rst_n  ),

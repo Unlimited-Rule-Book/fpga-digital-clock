@@ -6,7 +6,7 @@
 //
 // 输出信号（均在 sys_clk 域安全）：
 //   pulse_1ms : 每1ms输出一个宽度为1个sys_clk周期（20ns）的高脉冲
-//               → 用途：按键消抖计数使能、模式超时计数（counter_16s）使能
+//               → 用途：按键消抖计数使能、按键长短按判定计数使能
 //   pulse_1s  : 每1s输出一个宽度为1个sys_clk周期（20ns）的高脉冲
 //               → 用途：驱动 counter 走时
 //   sec_clk   : 1Hz，50%占空比时钟
@@ -76,39 +76,39 @@ module sys_divider #(
     //  sys_clk 域：三级同步寄存器 + 边沿检测 → pulse_1s
     // ----------------------------------------------------------------   
     // 三级寄存器：
-    //   _s1/_s2：两级同步，消除亚稳态
-    //   _s3：    延迟一拍，用于边沿检测    
-    reg sec_flag_s1, sec_flag_s2, sec_flag_s3;
-    reg ms_flag_s1,  ms_flag_s2,  ms_flag_s3;
+    //   _sync1/_sync2：两级同步，消除亚稳态
+    //   _sync3：    延迟一拍，用于边沿检测    
+    reg sec_flag_sync1, sec_flag_sync2, sec_flag_sync3;
+    reg ms_flag_sync1,  ms_flag_sync2,  ms_flag_sync3;
     
     always @(posedge sys_clk) begin
         if (!rst_n) begin
-            ms_flag_s1  <= 1'b0;
-            ms_flag_s2  <= 1'b0;
-            ms_flag_s3  <= 1'b0;
+            ms_flag_sync1  <= 1'b0;
+            ms_flag_sync2  <= 1'b0;
+            ms_flag_sync3  <= 1'b0;
             pulse_1ms   <= 1'b0;
             
-            sec_flag_s1 <= 1'b0;
-            sec_flag_s2 <= 1'b0;
-            sec_flag_s3 <= 1'b0;
+            sec_flag_sync1 <= 1'b0;
+            sec_flag_sync2 <= 1'b0;
+            sec_flag_sync3 <= 1'b0;
             pulse_1s    <= 1'b0;
             sec_clk     <= 1'b1;   // 初值与原 divider 一致，为高电平
         end else begin
-            ms_flag_s1  <= ms_flag;     // 第1级同步（可能亚稳态）
-            ms_flag_s2  <= ms_flag_s1;  // 第2即同步（稳定输出）
-            ms_flag_s3  <= ms_flag_s2;  // 第3级，用于边沿检测     
+            ms_flag_sync1  <= ms_flag;     // 第1级同步（可能亚稳态）
+            ms_flag_sync2  <= ms_flag_sync1;  // 第2即同步（稳定输出）
+            ms_flag_sync3  <= ms_flag_sync2;  // 第3级，用于边沿检测     
             
-            sec_flag_s1 <= sec_flag;    // 第1级同步（可能亚稳态）
-            sec_flag_s2 <= sec_flag_s1; // 第2级同步（稳定输出）
-            sec_flag_s3 <= sec_flag_s2; // 第3级，用于边沿检测
+            sec_flag_sync1 <= sec_flag;    // 第1级同步（可能亚稳态）
+            sec_flag_sync2 <= sec_flag_sync1; // 第2级同步（稳定输出）
+            sec_flag_sync3 <= sec_flag_sync2; // 第3级，用于边沿检测
             
             // XOR 边沿检测，上升沿和下降沿都触发（因为 sec_flag 是 toggle）
             // 每次跳变对应恰好过了1秒，pulse_out 高电平仅持续1个sys_clk周期(20ns)
-            pulse_1ms <= ms_flag_s2  ^ ms_flag_s3;
+            pulse_1ms <= ms_flag_sync2  ^ ms_flag_sync3;
             
-            pulse_1s  <= sec_flag_s2 && ~sec_flag_s3;   // 一定是下降沿检测，这样的话就符合我对 clock 模式下小数点与秒的配合：前半秒小数点亮、后半秒灭
+            pulse_1s  <= sec_flag_sync2 && ~sec_flag_sync3;   // 一定是下降沿检测，这样的话就符合我对 clock 模式下小数点与秒的配合：前半秒小数点亮、后半秒灭
             
-            sec_clk   <= sec_flag_s2;
+            sec_clk   <= sec_flag_sync2;
         end
     end
     

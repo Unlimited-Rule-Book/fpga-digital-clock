@@ -36,12 +36,12 @@ output  reg    long_press   // 长按触发信号，低电平有效
 );
 
 // 计算计数值
-localparam SHORT_END_CNT_MAX  = SHORT_END_MS  - 1; // 短按按键判定：最长不长于500ms计数值
-localparam LONG_PRESS_CNT_MAX = LONG_PRESS_MS - 1; // 长按时间3秒
+localparam SHORT_END_CNT_MAX  = SHORT_END_MS  - 1;  // 短按按键判定：最长不长于500ms计数值
+localparam LONG_PRESS_CNT_MAX = LONG_PRESS_MS - 1;  // 长按时间3秒
 
 
 // 定义计数器
-reg [$clog2(LONG_PRESS_MS)-1:0] press_cnt;    // 长短按计数器
+reg [$clog2(LONG_PRESS_MS)-1:0] press_cnt;  // 长短按计数器
 localparam SHORT_DURATION_MS = 20;          // 短按按下后，保持 20ms 再拉高
 localparam SHORT_DURATION_CNT_MAX = SHORT_DURATION_MS - 1;
 reg [$clog2(SHORT_DURATION_MS)-1:0] shortdur_press_cnt;

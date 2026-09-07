@@ -131,7 +131,7 @@ begin
                 current_load <= LOAD_IDLE;
             end
         end        
-        default: //----------------------后期可能修改------------------------------
+        default:
         begin
             current_load <= LOAD_IDLE;
             up_display <= 1'b0;
@@ -154,55 +154,6 @@ reg [1:0]   twinkle = 2'b0;
 localparam  TWINKLE_HOUR = 2'b00;
 localparam  TWINKLE_MINUTE = 2'b01;
 localparam  TWINKLE_SECOND = 2'b10;
-
-//将choose、num_up、num_down转化成脉宽等于系统时钟的脉冲
-reg choose_pulse = 1'b1;
-reg num_up_pulse = 1'b1;
-reg num_down_pulse = 1'b1;
-//采用跳沿检测，采集到下跳沿即产生脉冲
-reg choose_pulse_prev = 1'b1;
-reg num_up_pulse_prev = 1'b1;
-reg num_down_pulse_prev = 1'b1;
-always@(posedge sys_clk) begin
-    if(rst_n==1'b0) begin
-        choose_pulse_prev <= 1'b1;
-        num_up_pulse_prev <= 1'b1;
-        num_down_pulse_prev <= 1'b1;
-    end
-    else            
-    choose_pulse_prev <= choose;
-    num_up_pulse_prev <= num_up;
-    num_down_pulse_prev <= num_down;
-end
-always@(posedge sys_clk) begin
-    if(rst_n==1'b0)                                     choose_pulse <= 1'b1;
-    else if(choose_pulse_prev==1'b1 & choose==1'b0)     choose_pulse <= 1'b0;
-    else                                                choose_pulse <= 1'b1;
-end
-always@(posedge sys_clk) begin
-    if(rst_n==1'b0)                                     num_up_pulse <= 1'b1;
-    else if(num_up_pulse_prev==1'b1 & num_up==1'b0)     num_up_pulse <= 1'b0;
-    else                                                num_up_pulse <= 1'b1;
-end
-always@(posedge sys_clk) begin
-    if(rst_n==1'b0)                                     num_down_pulse <= 1'b1;
-    else if(num_down_pulse_prev==1'b1 & num_down==1'b0) num_down_pulse <= 1'b0;
-    else                                                num_down_pulse <= 1'b1;
-end
-
-
-//定义中间变量，决定加计数还是减计数
-reg count_direction = 1'b0;
-always@(*)
-begin
-    if(num_up==1'b0)
-        count_direction = 1'b0;
-    else if(num_down==1'b0)
-        count_direction = 1'b1;
-    else
-        count_direction = 1'b0;
-end
-
 
 //定义时分秒计数脉冲状态机的状态
 localparam  SET_HOUR = 2'b00;
@@ -243,15 +194,15 @@ begin
                 min_pulse <= 1'b0;
                 twinkle <= TWINKLE_HOUR;    // 用于控制该数位闪烁
     
-                if((~num_up_pulse) || (~num_down_pulse))begin
+                if((~num_up) || (~num_down))begin
                     hour_pulse <= 1'b1;
                 end
-                else if((num_up_pulse) || (num_down_pulse))
+                else if((num_up) || (num_down))
                     hour_pulse <= 1'b0;
                 else
-                    hour_pulse <= hour_pulse; // 只修改了这一处，分、秒的都没改。主要是考虑到 count_direction 已经是脉冲了， hour_pulse 是不是不需要边沿检测了
+                    hour_pulse <= hour_pulse;
                     
-                if(~choose_pulse) current_set <= SET_MINUTE;    // choose低有效
+                if(~choose) current_set <= SET_MINUTE;    // choose低有效
             end
             SET_MINUTE:
             begin
@@ -259,12 +210,12 @@ begin
                 hour_pulse <= 1'b0;
                 twinkle <= TWINKLE_MINUTE;    // 用于控制该数位闪烁
     
-                if((~num_up_pulse) || (~num_down_pulse))
+                if((~num_up) || (~num_down))
                     min_pulse <= 1'b1;
                 else
                     min_pulse <= 1'b0;
                     
-                if(~choose_pulse) current_set <= SET_SECOND;    // choose低有效
+                if(~choose) current_set <= SET_SECOND;    // choose低有效
             end        
             SET_SECOND:
             begin
@@ -272,12 +223,12 @@ begin
                 hour_pulse <= 1'b0;
                 twinkle <= TWINKLE_SECOND;    // 用于控制该数位闪烁
             
-                    if((~num_up_pulse) || (~num_down_pulse))
+                    if((~num_up) || (~num_down))
                         sec_pulse <= 1'b1;
                     else
                         sec_pulse <= 1'b0;
         
-                if(~choose_pulse) current_set <= SET_HOUR;//    choose低有效
+                if(~choose) current_set <= SET_HOUR;//    choose低有效
             end        
             default: 
             begin
@@ -372,9 +323,9 @@ always@(posedge sys_clk)
 begin
     if(!rst_n)
         radix_hour_up <= 4'b1001;
-    else if(count_direction==1'b0 && load_hour[7:4]==4'b0010)
+    else if(~num_up==1'b0 && load_hour[7:4]==4'b0010)
         radix_hour_up <= 4'b0011;
-    else if(count_direction==1'b0 && (load_hour[7:4]==4'b0001 || load_hour[7:4]==4'b0000))
+    else if(~num_up==1'b0 && (load_hour[7:4]==4'b0001 || load_hour[7:4]==4'b0000))
         radix_hour_up <= 4'b1001;
 end
 // 减计数进制动态显示
@@ -382,12 +333,18 @@ always@(posedge sys_clk)
 begin
     if(!rst_n)
         radix_hour_down <= 4'b1001;
-    else if(count_direction==1'b1 && (load_hour==8'b0000_0000                            || load_hour[7:4]==4'b0010) && load_hour!=8'b0010_0000)    
+    else if(~num_down==1'b1 && (load_hour==8'b0000_0000 || load_hour[7:4]==4'b0010) && load_hour!=8'b0010_0000)    
         radix_hour_down <= 4'b0011;                                                     //十位为2时，除了20，其余个位均为3进制
-    else if(count_direction==1'b1 && (load_hour[7:4]==4'b0000 || load_hour[7:4]==4'b0001 || load_hour==8'b0010_0000) && load_hour!=8'b0000_0000)
+    else if(~num_down==1'b1 && (load_hour[7:4]==4'b0000 || load_hour[7:4]==4'b0001 || load_hour==8'b0010_0000) && load_hour!=8'b0000_0000)
         radix_hour_down <= 4'b1001;
 end
+
 // 进制最终决定
+// 注意：由于个位的进制是由两个 always 块决定，信号流水线式传递，所以第二级 always 要接收延迟一拍的 num_up num_down
+reg num_up_d;
+always@(posedge sys_clk)    num_up_d <= num_up;
+reg num_down_d;
+always@(posedge sys_clk)    num_down_d <= num_down;
 always@(posedge sys_clk)
 begin
     if(~rst_n)
@@ -399,14 +356,33 @@ begin
         else if(before_hour[7:4]==4'b0001 || before_hour[7:4]==4'b0000)
             radix_hour <= 4'b1001;
         end
-    else if(~num_up_pulse)  // 其余时刻，进制权交给 上下计数 按键
+    else if(~num_up_d)  // 其余时刻，进制权交给 上下计数 按键
         radix_hour <= radix_hour_up;
-    else if(~num_down_pulse)
+    else if(~num_down_d)
         radix_hour <= radix_hour_down;
     else
         radix_hour <= radix_hour;
 end
 
+//定义中间变量，决定加计数还是减计数
+reg count_direction;
+always@(posedge sys_clk)
+begin
+    if(!rst_n)
+        count_direction <= 1'b0;
+    else if(~num_up)
+        count_direction <= 1'b0;
+    else if(~num_down)
+        count_direction <= 1'b1;
+    else
+        count_direction <= count_direction;
+end
+
+// 由于小时个位进制的决定由两个 always 块决定，所以其 hour_pulse 也要延迟一个时钟周期
+// 小时十位不必像 alarm 一样加延迟，因为 load_num 不存在 edit_hour==8'hFF 导致的进制 radix_hour_lo 残留 F 或类似的情况
+// alarm 中的 radix_hour_lo （小时低位的进制）对应本模块 radix_hour
+reg hour_pulse_d;
+always@(posedge sys_clk)    hour_pulse_d <= hour_pulse;
 //实例化
 counter sec0(sys_clk,sec_pulse, rst_n,load_before_d,before_second[3:0],4'b1001,   1'b1  ,1'b0,count_direction,load_second[3:0],RCO[0],load_point[0]),
         sec1(sys_clk,sec_pulse, rst_n,load_before_d,before_second[7:4],4'b0101,   RCO[0],1'b0,count_direction,load_second[7:4],RCO[1],load_point[1]),
@@ -414,8 +390,8 @@ counter sec0(sys_clk,sec_pulse, rst_n,load_before_d,before_second[3:0],4'b1001, 
         min0(sys_clk,min_pulse, rst_n,load_before_d,before_minute[3:0],4'b1001,   1'b1  ,1'b1,count_direction,load_minute[3:0],RCO[2],load_point[2]),
         min1(sys_clk,min_pulse, rst_n,load_before_d,before_minute[7:4],4'b0101,   RCO[2],1'b0,count_direction,load_minute[7:4],RCO[3],load_point[3]),
 
-        hor0(sys_clk,hour_pulse,rst_n,load_before_d,before_hour[3:0],  radix_hour,1'b1  ,1'b1,count_direction,load_hour[3:0],  RCO[4],load_point[4]),
-        hor1(sys_clk,hour_pulse,rst_n,load_before_d,before_hour[7:4],  4'b0010,   RCO[4],1'b0,count_direction,load_hour[7:4],  RCO[5],load_point[5]);
+        hor0(sys_clk,hour_pulse_d,rst_n,load_before_d,before_hour[3:0],  radix_hour,1'b1  ,1'b1,count_direction,load_hour[3:0],  RCO[4],load_point[4]),
+        hor1(sys_clk,hour_pulse,  rst_n,load_before_d,before_hour[7:4],  4'b0010,   RCO[4],1'b0,count_direction,load_hour[7:4],  RCO[5],load_point[5]);
 // 注：从右往左数第1个数字代表着counter的point_in输入口，此端口其实不需要输入，但是未用的输入端口则必须提供一个确定的值
 // 而最右侧的输出端口 point_out 也不需要，就暂时悬空
 

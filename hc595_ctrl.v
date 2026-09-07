@@ -93,8 +93,9 @@ end
 //ds:将寄存器里存储的数码管信号输入
 always@(posedge sys_clk)
 begin
-//由于seg_dynamic里已经设定了复位时数码管的显示，故此处不设置复位信号
-    if(cnt_4 == 2'b0)
+    if(!rst_n)
+        ds <= 1'b0;
+    else if(cnt_4 == 2'b0)
         ds <= data[cnt_bit];
     else
         ds <= ds;

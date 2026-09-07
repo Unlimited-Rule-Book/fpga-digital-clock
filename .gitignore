@@ -1,12 +1,3 @@
-# Quartus 编译输出，体积大且可重新生成
-output_files/
-db/
-incremental_db/
-simulation/
-*.jdi
-*.pin
-*.summary
-*.smsg
 *.ddb
 *.txt
 

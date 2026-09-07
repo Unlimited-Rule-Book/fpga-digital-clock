@@ -161,7 +161,7 @@ sys_divider clock_mode_sys_divider
 
 
 //  ====================  实例化按键消抖、按键消抖长短按模块  ====================
-// 按键消抖（短按）
+// 按键消抖
 // 注意！！改变消抖时间，修改实例化时的参数即可，无需关心内部计数
 wire    choose_db;
 wire    num_up_db;
@@ -174,9 +174,34 @@ btn_debounce #(.DEBOUNCE_MS(20))
     clock_mode_btn_debounce_num_up   (sys_clk, pulse_1ms, rst_n, num_up, num_up_db),
     clock_mode_btn_debounce_num_down (sys_clk, pulse_1ms, rst_n, num_down, num_down_db),
     clock_mode_btn_debounce_load     (sys_clk, pulse_1ms, rst_n, load, load_db);
-// 按键消抖+短按检测（大于20ms小于500ms）+长按3秒检测  
-// 注意！！改变消抖时间和长短按时长，修改实例化时的参数即可，无需关心内部计数 
-// 从按键消抖模块中取出的长短按load
+// choose_db num_up_db num_down_db 脉冲产生
+reg choose_pulse = 1'b1;    // 这个 choose 信号专供 load_num, 因为该模块的 choose 没有长短按需求，
+reg num_up_pulse = 1'b1;                                    //直接用 choose_db 产生脉冲，用户使用体验比用 load_short_pulse 更好
+reg num_down_pulse = 1'b1;
+//采用跳沿检测，采集到下跳沿即产生脉冲
+reg choose_prev = 1'b1;
+reg num_up_prev = 1'b1;
+reg num_down_prev = 1'b1;
+always@(posedge sys_clk)    choose_prev <= choose_db;
+always@(posedge sys_clk)    num_up_prev <= num_up_db;
+always@(posedge sys_clk)    num_down_prev  <= num_down_db;
+always@(posedge sys_clk) begin
+    if(rst_n==1'b0)                                 choose_pulse <= 1'b1;
+    else if(choose_prev==1'b1 & choose_db==1'b0)    choose_pulse <= 1'b0;
+    else                                            choose_pulse <= 1'b1;
+end
+always@(posedge sys_clk) begin
+    if(rst_n==1'b0)                                 num_up_pulse <= 1'b1;
+    else if(num_up_prev==1'b1 & num_up_db==1'b0)    num_up_pulse <= 1'b0;
+    else                                            num_up_pulse <= 1'b1;
+end
+always@(posedge sys_clk) begin
+    if(rst_n==1'b0)                                 num_down_pulse <= 1'b1;
+    else if(num_down_prev==1'b1 & num_down_db==1'b0)num_down_pulse <= 1'b0;
+    else                                            num_down_pulse <= 1'b1;
+end
+
+// 短按检测（小于500ms）+长按3秒检测  
 wire    load_short;
 wire    load_long;
 // 按键消抖+长短按模块接口已改为pulse_1ms计数，LONG_PRESS_MS单位为ms
@@ -191,40 +216,24 @@ clock_mode_btn_duration_load
     .short_press    (load_short),
     .long_press     (load_long) 
 );
-// 长短按load脉冲         
+// 长短按 load 脉冲         
 reg     load_short_pulse;
 reg     load_long_pulse;
 // 记录上次长短按信号，以便产生脉冲
 reg    load_short_prev;
 reg    load_long_prev;
-// 长短按load脉冲产生                    
+// 长短按 load 脉冲产生                    
+always@(posedge sys_clk)    load_short_prev <= load_short;
+always@(posedge sys_clk)    load_long_prev  <= load_long;
 always@(posedge sys_clk) begin
-    if(!rst_n)begin
-        load_short_pulse <= 1'b1;
-        load_short_prev <= 1'b1;
-    end
-    else if(load_short_prev==1'b1 && load_short==1'b0)begin
-        load_short_pulse <= 1'b0;
-        load_short_prev <= load_short;
-    end
-    else begin
-        load_short_pulse <= 1'b1;
-        load_short_prev <= load_short;
-    end
+    if(rst_n==1'b0)                                     load_short_pulse <= 1'b1;
+    else if(load_short_prev==1'b1 & load_short==1'b0)   load_short_pulse <= 1'b0;
+    else                                                load_short_pulse <= 1'b1;
 end
 always@(posedge sys_clk) begin
-    if(!rst_n)begin
-        load_long_pulse <= 1'b1;
-        load_long_prev <= 1'b1;
-    end
-    else if(load_long_prev==1'b1 && load_long==1'b0)begin
-        load_long_pulse <= 1'b0;
-        load_long_prev <= load_long;
-    end
-    else begin
-        load_long_pulse <= 1'b1;
-        load_long_prev <= load_long;
-    end
+    if(rst_n==1'b0)                                     load_long_pulse <= 1'b1;
+    else if(load_long_prev==1'b1 & load_long==1'b0)     load_long_pulse <= 1'b0;
+    else                                                load_long_pulse <= 1'b1;
 end
 // alarm 专供的 choose
 wire    choose_short;
@@ -240,6 +249,24 @@ clock_mode_btn_duration_choose
     .short_press    (choose_short),
     .long_press     (choose_long) 
 );
+//将 choose 的两个信号转化成脉宽等于系统时钟的脉冲
+reg choose_short_pulse = 1'b1;
+reg choose_long_pulse = 1'b1;
+//采用跳沿检测，采集到下跳沿即产生脉冲
+reg choose_short_prev = 1'b1;
+reg choose_long_prev = 1'b1;
+always@(posedge sys_clk)    choose_short_prev <= choose_short;
+always@(posedge sys_clk)    choose_long_prev  <= choose_long;
+always@(posedge sys_clk) begin
+    if(rst_n==1'b0)                                         choose_short_pulse <= 1'b1;
+    else if(choose_short_prev==1'b1 & choose_short==1'b0)   choose_short_pulse <= 1'b0;
+    else                                                    choose_short_pulse <= 1'b1;
+end
+always@(posedge sys_clk) begin
+    if(rst_n==1'b0)                                         choose_long_pulse <= 1'b1;
+    else if(choose_long_prev==1'b1 & choose_long==1'b0)     choose_long_pulse <= 1'b0;
+    else                                                    choose_long_pulse <= 1'b1;
+end
 
 
 
@@ -325,7 +352,13 @@ localparam COUNTER_15S_COUNT = COUNTER_15S_TIME;      // 15秒计数值
 // ⚠ 踩坑警示：这里时间=走过的间隔数=计数值，值域0~15含16个状态但只递增15次=15秒；
 // 计数器counter的0是有效状态，循环一圈(0→9→0)才算满，此处0只是起点不占时间，故COUNT=TIME=15，不是"16个数"。
 
-//采用跳沿检测按键输入变化
+// 采用跳沿检测按键输入变化
+// 之前，将 choose num_up/down 变成脉冲的任务在 alarm load_num 中，现已移交至顶层。
+// 所以就有了 plan B ：可以用 button_now 表示拼接后的 choose num_up/down 脉冲，然后用 缩位与 运算——
+// 缩位与后，只要 button_now 里有0（按键被按下），运算结果就是0，进而判断是否有按键按下。
+// 但是这样有一个问题: plan A 中，使用的是消抖后的信号，无论用户按下还是抬起按键，都算是按键状态改变
+// plan B 中，对于 num_up/down ，用户只有按下的一刻会产生脉冲，抬起时不产生，所以抬起不算按键状态改变
+// 我更倾向于 plan A, 所以就不做更改了
 reg [2:0]   button_prev=3'b111;      //记录输入信号之前的值（num_up、num_down、choose），按系统时钟更新
 wire[2:0]   button_now;
 assign      button_now={choose_db,num_up_db,num_down_db};//现在的值，实时更新
@@ -456,9 +489,9 @@ begin
             mode_alarm_en <= 1'b0;
             // 输入控制 load
             load_clock       <= load_long_pulse;
-            choose_load_num  <= choose_db;
-            num_up_load_num  <= num_up_db;
-            num_down_load_num<= num_down_db;
+            choose_load_num  <= choose_pulse;
+            num_up_load_num  <= num_up_pulse;
+            num_down_load_num<= num_down_pulse;
             // 输入控制 alarm
             choose_alarm     <= 1'b1;
             choose_edit_alarm<= 1'b1;
@@ -504,10 +537,10 @@ begin
             num_up_load_num  <= 1'b1;
             num_down_load_num<= 1'b1;
             // 输入控制 alarm
-            choose_alarm     <= choose_short;
-            choose_edit_alarm<= choose_long;
-            num_up_alarm     <= num_up_db;
-            num_down_alarm   <= num_down_db;
+            choose_alarm     <= choose_short_pulse;
+            choose_edit_alarm<= choose_long_pulse;
+            num_up_alarm     <= num_up_pulse;
+            num_down_alarm   <= num_down_pulse;
             load_confirm_alarm<= load_long_pulse;
             load_alarm        <= load_short_pulse;
             //输出控制
@@ -570,7 +603,7 @@ begin
             disp_point_twinkle_en <= 1'b1;
             alarm_beep_disp_en    <= 1'b0;
         end 
-            
+
         endcase
     end
 end
@@ -704,7 +737,7 @@ wire    [7:0]   seg;
 seg_dynamic     clock_mode_seg_dynamic
 (
    .sys_clk            (sys_clk   ),
-   .pre_clk            (sys_clk_1mhz),   
+   .pulse_1ms          (pulse_1ms ),   
    .sec_clk            (sec_clk   ), 
    .rst_n              (rst_n     ),
    .out_second         (disp_second),

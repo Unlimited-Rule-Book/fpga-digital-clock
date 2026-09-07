@@ -6,7 +6,7 @@
 //
 // 输出信号（均在 sys_clk 域安全）：
 //   pulse_1ms : 每1ms输出一个宽度为1个sys_clk周期（20ns）的高脉冲
-//               → 用途：按键消抖计数使能、按键长短按判定计数使能
+//               → 用途：按键消抖计数使能、按键长短按判定计数使能，数码管动态显示的扫描时钟
 //   pulse_1s  : 每1s输出一个宽度为1个sys_clk周期（20ns）的高脉冲
 //               → 用途：驱动 counter 走时
 //   sec_clk   : 1Hz，50%占空比时钟
@@ -30,7 +30,7 @@ module sys_divider #(
     input  wire rst_n,
     
     output reg  pulse_1s,    // 1Hz 秒脉冲，宽度 = 1个sys_clk周期（20ns），sys_clk域安全
-    output reg  pulse_1ms,   // 1kHZ毫秒脉冲，用于驱动按键消抖
+    output reg  pulse_1ms,   // 1kHZ毫秒脉冲，用于驱动按键消抖和数码管动态显示的扫描时钟
     output reg  sec_clk      // 1Hz 50%占空比时钟，用于小数点闪烁驱动
 );
     // ----------------------------------------------------------------

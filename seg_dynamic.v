@@ -4,7 +4,7 @@
 //
 // 扫描原理：
 //   六个数码管轮流点亮（每次只亮一个），利用人眼视觉暂留形成"同时显示"的效果。
-//   扫描时钟 seg_toggle / seg_flag 由 pre_clk（1MHz）内部分频生成，周期约1ms（1000计数后翻转）。
+//   扫描时钟 pulse_1ms 来自 sys_divider。
 //   六个位轮流一遍共6ms，即刷新率约167Hz，远高于人眼分辨率。
 //
 // 小数点控制：
@@ -24,7 +24,7 @@
 module seg_dynamic
 (
 input   wire    sys_clk,
-input   wire    pre_clk,                // 数码管刷新时钟，1us为周期，PLL生成
+input   wire    pulse_1ms,              // 数码管扫描时钟，1ms为周期，来自 sys_divider
 input   wire    sec_clk,                // 为实现数码管以1s为周期闪烁
 input   wire    rst_n,
 input   wire    [7:0]   out_second,
@@ -36,20 +36,7 @@ input   wire    point_out_twinkle_en,
 output  reg     [5:0]   sel = 6'b11_1111,   // 数码管位选信号，初值为选中所有数码管
 output  reg     [7:0]   seg = 8'b0          // 数码管段选信号，初值为点亮数码管的所有段
 );
-
-//  ====================  参数声明  ====================
-// 两级同步器 + 边沿检测XOR，生成数码管显示的使能信号seg_flag
-parameter   MS_TOP = 1000;
-// 期望数码管以1ms为周期进行扫描，待分频时钟1mhz计1000个数后反转，生成的seg_toggle是2ms为周期的。
-// seg_toggle进入同步逻辑，每次反转都会生成seg_flag脉冲，为1ms脉冲，刷新数码管的时钟的电平
-localparam  CNT_MAX = MS_TOP - 1'b1;
-
 //  ====================  定义中间变量  ====================
-//定义中间变量——数码管刷新时钟
-reg     [$clog2(CNT_MAX)-1:0]  cnt_ms;  // 2ms计数器，用于控制seg_toggle的反转
-reg     seg_flag = 1'b0;
-reg     seg_toggle = 1'b0;
-reg     seg_toggle_sync1,  seg_toggle_sync2,  seg_toggle_sync3;
 //定义中间变量——数码管数据显示
 reg     [2:0]   cnt_sel = 3'b0;         // 位选信号计数器
 reg     [3:0]   data_disp = 4'b0;       // 为了避免case语句嵌套，增强可读性，定义此变量位段选信号生成的中间变量，此变量不包含小数点
@@ -57,45 +44,14 @@ reg     [3:0]   data_disp = 4'b0;       // 为了避免case语句嵌套，增强
 reg     point_disp = 1'b0;              // 当前数码管显示的小数点
 
 //  ====================  主程序  ====================
-//seg_flag:数码管刷新时钟使能信号
-always@(posedge pre_clk)
-begin
-    if(~rst_n)begin
-        cnt_ms <= 0;
-        seg_toggle <= 1'b0;
-    end
-    else if(cnt_ms==CNT_MAX) begin
-        cnt_ms <= 0;
-        seg_toggle <= ~seg_toggle;
-    end
-    else
-        cnt_ms <= cnt_ms + 1'b1;
-end
-always@(posedge sys_clk)
-begin
-    if(~rst_n)begin
-        seg_toggle_sync1 <= 1'b0;
-        seg_toggle_sync2 <= 1'b0;
-        seg_toggle_sync3 <= 1'b0;
-        seg_flag      <= 1'b0;
-    end
-    else begin
-        seg_toggle_sync1 <= seg_toggle;
-        seg_toggle_sync2 <= seg_toggle_sync1;
-        seg_toggle_sync3 <= seg_toggle_sync2;
-     
-        seg_flag <= seg_toggle_sync2 ^ seg_toggle_sync3;
-    end
-end
-
 //cnt_sel:位选信号计数器
 always@(posedge sys_clk)
 begin
     if(~rst_n)
         cnt_sel <= 0;
-    else if(cnt_sel==3'd5 && seg_flag)
+    else if(cnt_sel==3'd5 && pulse_1ms)
         cnt_sel <= 0;
-    else if (seg_flag)
+    else if (pulse_1ms)
         cnt_sel <= cnt_sel + 1'b1;
 end
 
@@ -104,7 +60,7 @@ always@(posedge sys_clk)
 begin
     if(~rst_n)begin
         data_disp <= 4'd15; sel <= 6'b11_1111; end    //复位：全显示
-    else if(seg_flag)begin
+    else if(pulse_1ms)begin
         case(cnt_sel)
         3'd0:   begin data_disp   <=  out_second[3:0];  sel <=  6'b00_0001; end
         3'd1:   begin data_disp   <=  out_second[7:4];  sel <=  6'b00_0010; end
@@ -123,9 +79,9 @@ always@(posedge sys_clk)
 begin
     if(~rst_n)
         point_disp <= 1'b1; // 默认小数点熄灭
-    else if(~point_out_twinkle_en            && seg_flag)    point_disp <= ~point_out[cnt_sel];
-    else if(point_out_twinkle_en && sec_clk  && seg_flag)    point_disp <= ~point_out[cnt_sel];
-    else if(point_out_twinkle_en && ~sec_clk && seg_flag)    point_disp <= 1'b1;
+    else if(~point_out_twinkle_en            && pulse_1ms)    point_disp <= ~point_out[cnt_sel];
+    else if(point_out_twinkle_en && sec_clk  && pulse_1ms)    point_disp <= ~point_out[cnt_sel];
+    else if(point_out_twinkle_en && ~sec_clk && pulse_1ms)    point_disp <= 1'b1;
     else                                                     point_disp <= point_disp;
 end
 

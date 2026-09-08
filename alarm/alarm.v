@@ -541,14 +541,14 @@ assign  disp_state  = (mode_en && current_alarm==ALARM_VIEW) ? {alarm_num_bcd, a
                       (mode_en && current_alarm==ALARM_EDIT) ? ready_state      :
                       (~mode_en&& alarm_beep_disp_en)        ? beep_hour        :
                       8'hFF;   // 增加完全关闭时的保护：mode_en使能且ALARM_VIEW待机时，或者干脆没使能时，都为FF，seg_dynamic编码为全显示
-assign  disp_hour   = (mode_en && current_alarm==ALARM_VIEW) ? view_num[15:8]   : 
-                      (mode_en && current_alarm==ALARM_EDIT) ? ready_hour       :
-                      (~mode_en&& alarm_beep_disp_en)        ? beep_minute      :
+assign  disp_hour   = (mode_en && current_alarm==ALARM_VIEW) ? view_num[15:8]   :   // ALARM_VIEW 时的显示
+                      (mode_en && current_alarm==ALARM_EDIT) ? ready_hour       :   // ALARM_EDIT 时的显示
+                      (~mode_en&& alarm_beep_disp_en)        ? beep_minute      :   // 闹钟鸣响时的显示
                       8'hFF;
-assign  disp_minute = (mode_en && current_alarm==ALARM_VIEW) ? view_num[7:0]    : 
-                      (mode_en && current_alarm==ALARM_EDIT) ? ready_minute     :
-                      (~mode_en&& alarm_beep_disp_en)        ? beep_second      :
-                      8'hFF;                 
+assign  disp_minute = (mode_en && current_alarm==ALARM_VIEW) ? view_num[7:0]    :   
+                      (mode_en && current_alarm==ALARM_EDIT) ? ready_minute     :   
+                      (~mode_en&& alarm_beep_disp_en)        ? beep_second      :   // 本模块端口名 disp_* 对应的是 显示语义 ，而非物理数码管分组 deep_*
+                      8'hFF;                                                        // 故 disp_minute 应该被 beep_second 赋值 
 assign  point_out   = (~mode_en&& alarm_beep_disp_en)        ? beep_point       :
                       load_point;
 

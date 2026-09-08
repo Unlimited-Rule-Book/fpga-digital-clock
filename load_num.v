@@ -113,7 +113,7 @@ begin
                 current_load <= LOAD_SHOW;  //维持原态
             end
             if (up_display==1'b1&down_display==1'b1) begin
-            //两使能齐全才切换模式，保证LOAd至少显示1秒
+            //两使能齐全才切换模式，保证LOAd至少显示0.5秒，最多不到1秒 - [0.5,1)
                 up_display <= 1'b0;
                 down_display <= 1'b0;
                 current_load <= LOAD_EDIT;
@@ -323,9 +323,9 @@ always@(posedge sys_clk)
 begin
     if(!rst_n)
         radix_hour_up <= 4'b1001;
-    else if(~num_up==1'b0 && load_hour[7:4]==4'b0010)
+    else if(~num_up && load_hour[7:4]==4'b0010)
         radix_hour_up <= 4'b0011;
-    else if(~num_up==1'b0 && (load_hour[7:4]==4'b0001 || load_hour[7:4]==4'b0000))
+    else if(~num_up && (load_hour[7:4]==4'b0001 || load_hour[7:4]==4'b0000))
         radix_hour_up <= 4'b1001;
 end
 // 减计数进制动态显示
@@ -333,9 +333,9 @@ always@(posedge sys_clk)
 begin
     if(!rst_n)
         radix_hour_down <= 4'b1001;
-    else if(~num_down==1'b1 && (load_hour==8'b0000_0000 || load_hour[7:4]==4'b0010) && load_hour!=8'b0010_0000)    
+    else if(~num_down && (load_hour==8'b0000_0000 || load_hour[7:4]==4'b0010) && load_hour!=8'b0010_0000)    
         radix_hour_down <= 4'b0011;                                                     //十位为2时，除了20，其余个位均为3进制
-    else if(~num_down==1'b1 && (load_hour[7:4]==4'b0000 || load_hour[7:4]==4'b0001 || load_hour==8'b0010_0000) && load_hour!=8'b0000_0000)
+    else if(~num_down && (load_hour[7:4]==4'b0000 || load_hour[7:4]==4'b0001 || load_hour==8'b0010_0000) && load_hour!=8'b0000_0000)
         radix_hour_down <= 4'b1001;
 end
 

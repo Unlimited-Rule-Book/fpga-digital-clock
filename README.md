@@ -29,7 +29,7 @@
 
 本项目**不是纯 RTL 工程**：`clock_mode.v` 实例化了 PLL 的 `my_pll_divider`，`beep_song.v` 实例化了 RAM 的 `my_ram`。仓库**不包含**这两个 IP 的生成文件（它们是 Quartus 向导生成的、与器件绑定，不同环境需自行配置），所以拿到源码后**不能直接编译**——第一次会报 `module my_pll_divider / my_ram not found`。
 
-**最小复现路径**：在 Quartus II 里按下列参数重建这两个 IP，并把模块命名为 `my_pll_divider` / `my_ram`、端口名保持一致，即可**不改任何 RTL 代码**直接编译。若想用其它命名/端口，则需同步修改 `clock_mode.v`（PLL 例化处）与 `beep_song.v`（RAM 例化处）。
+**最小复现路径**：在 EDA 工具里按下列参数重建这两个 IP，并把模块命名为 `my_pll_divider` / `my_ram`、端口名保持一致，即可**不改任何 RTL 代码**直接编译。若想用其它命名/端口，则需同步修改 `clock_mode.v`（PLL 例化处）与 `beep_song.v`（RAM 例化处）。
 
 ### ① PLL —— my_pll_divider（50MHz → 1MHz）
 
@@ -97,7 +97,7 @@ MegaWizard 配置参数：
 
 在 RAM 的 MegaWizard 配置页将初始化文件指向其中之一。**注意：`init_file` 路径是相对主工程 `.qpf` 文件所在目录的，不是相对 RAM 文件本身**——例如工程在 `quartus_prj/` 下，应填 `../rtl/beep/your_new_home.mif`。
 
-换歌：改 `init_file` 指向另一份 `.mif` 后重新全编译即可。RAM 未关联 `.mif`（或路径错误）时内容为空，蜂鸣器不会响。
+换歌：1. 改 `init_file` 指向另一份 `.mif` 2. beep_song.v 中的 BPM 参数需改为对那个歌曲的数值（起风了=80，_Your New Home_=90，稍快一点）。然后重新全编译即可。RAM 未关联 `.mif`（或路径错误）时内容为空，蜂鸣器不会响。
 
 ### ④ 其它提醒
 
@@ -186,4 +186,4 @@ flowchart TB
     说得比较抽象， load_num alarm 代码中有详细解释。
 - alarm_ring_en 维持1秒高电平后自动清除，输出到 clock_mode 里，触发 counter_beep 自增，计数未达到90前， beep_en 持续拉高，作为 beep_song 模块的输入
 - 闹钟鸣响时，状态机自动从 MODE_CLOCK 切换到 MODE_BEEP，数码管显示当前鸣响闹钟的时间（以0.5Hz慢闪烁，1秒亮/1秒灭）
-- 闹钟鸣响显示的数据流：alarm.v 在时间匹配时用 beep_index 记录触发闹钟编号，clock_mode 拉高 alarm_beep_disp_en 后，alarm.v 将对应闹钟时间以闪烁形式输出到 disp_* 端口，供 seg_dynamic 扫描显示
+- 闹钟鸣响显示的数据流：alarm.v 在时间匹配时用 beep_idx 记录触发闹钟编号，clock_mode 拉高 alarm_beep_disp_en 后，alarm.v 将对应闹钟时间以闪烁形式输出到 disp_* 端口，供 seg_dynamic 扫描显示

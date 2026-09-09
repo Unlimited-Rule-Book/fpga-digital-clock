@@ -8,7 +8,7 @@
 //
 // 输出信号（均为低电平有效）：
 //   short_press : 短按触发，在按键抬起后输出约20ms宽的低电平脉冲
-//   long_press  : 长按触发，在按满3s时立即输出约1ms宽的低电平信号，直到按键抬起才恢复高电平
+//   long_press  : 长按触发，在按满3s时立即输出低电平信号，直到按键抬起才恢复高电平
 //
 // 判定逻辑：
 //   按下时间 0ms~500ms，抬起后：short_press触发（低脉冲持续20ms后自动拉高）
@@ -20,6 +20,17 @@
 // 与 btn_debounce 的联系与区别：
 //   1. 本身不含按键消抖，按键输入信号已经过消抖
 //   2. 可以将 分频功能 嵌入本模块内，当然也可以直接用 sys_divider 产生的 pulse_1ms ，具体原因见 btn_debounce.v 模块
+//     2.5 分频功能嵌入的优势：如果忽略2us同步误差（下面介绍），每次按键按下, pre_ms_cnt 都从零相位开始计时
+//                      反之，如果将分频功能交给 sys_divider, 系统分频器是连续工作的，故按键按下的时刻会落在
+//                      1ms计数器 计数的任意时刻（相位），造成第 1ms 计时不完整（0~1ms 早计）
+//
+// 内部 pulse_1ms 的启动与精度说明：
+//   1. 使能链路：active(=cs!=IDLE, sys_clk域) -- 2拍pre_clk同步 --> pre_clk_en(pre_clk域)，控制 pre_clk 域计数器启停；
+//      sys_clk 域同步链由本域 active 直接门控（不用 pre_clk_en, 因为它是 pre_clk 域信号）。
+//   2. 固有偏差：进入 TIMING 后计数晚约 2us 才出首个 pulse_1ms, 是将 active 同步到 pre_clk 域的代价；
+//      active 撤销时 sys_clk 域先停、pre_clk 域滞后约 2us 停, 2us 窗口内即使 pre_ms_cnt 计满使得 pre_ms_flag 翻转，
+//                                                              也不会被 sys_clk 域的三级同步器捕获，无假脉冲。
+//
 // =============================================================================
 module btn_duration#(
 parameter SHORT_END_MS = 500,    // 短按按键判定：最长不长于0.5秒
@@ -148,7 +159,7 @@ always @(posedge sys_clk) begin
     if (!rst_n) begin
         pre_ms_sync1 <= 0; pre_ms_sync2 <= 0; pre_ms_sync3 <= 0;
         pulse_1ms <= 0;
-    end else if(pre_clk_en) begin
+    end else if(active) begin
         pre_ms_sync1 <= pre_ms_flag;
         pre_ms_sync2 <= pre_ms_sync1;
         pre_ms_sync3 <= pre_ms_sync2;

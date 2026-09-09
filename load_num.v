@@ -55,9 +55,9 @@ localparam  LOAD_IDLE = 2'b00;  //IDLE空闲状态
 localparam  LOAD_SHOW = 2'b01;  //显示LOAd几个字
 localparam  LOAD_EDIT = 2'b10;  //EDIT编辑状态
 //定义数码管显示状态机
-reg [1:0]   current_load = LOAD_IDLE;
+reg [1:0]   current_load;
 //定义置数使能信号
-reg set_en = 1'b0;
+reg set_en;
 
 //定义SHOW状态数码管显示的字符，这些在末尾对 disp_* point_out 赋值时才会用到
 localparam  SHOW_EMPTY = 4'd14;  //全空，与seg_dynamic中的设定有关，既用于“ LOAd ”左右两侧数码管的显示，也用于 LOAD_EDIT 状态下，被选中的数位闪烁的显示
@@ -71,16 +71,11 @@ reg sec_clk_prev = 1'b1;
 // 这里并没有把sec_clk_prev <= sec_clk放在状态机内，
 // 是因为若将sec_clk_prev的更新放在状态机的LOAD_SHOW状态内，就切断了它在其他状态下的跟踪，
 // 导致进入该状态时“历史值”失真，边沿检测逻辑会立刻误触发，从而显著缩短预期停留时间
-always@(posedge sys_clk)
-begin
-    if(rst_n==1'b0)
-        sec_clk_prev <= 1'b1;
-    else
-        sec_clk_prev <= sec_clk;
-end
+always@(posedge sys_clk) sec_clk_prev <= sec_clk;
+
 //用于记录sec_clk的上、下跳沿，从而记录1秒钟
-reg up_display   = 1'b0;
-reg down_display = 1'b0;
+reg up_display;
+reg down_display;
 
 //状态机，控制数码管的显示
 always@(posedge sys_clk)
@@ -150,7 +145,7 @@ end
 //  ====================  LOAD_EDIT 编辑置数状态，时分秒选择（计数脉冲产生）状态机  ====================
 // 数字闪烁状态机变量证明，该状态机在代码counter的下面
 // 没错，这不是此状态机的变量声明，而是下一个与本状态机配合的状态机的声明！！
-reg [1:0]   twinkle = 2'b0;
+reg [1:0]   twinkle;
 localparam  TWINKLE_HOUR = 2'b00;
 localparam  TWINKLE_MINUTE = 2'b01;
 localparam  TWINKLE_SECOND = 2'b10;
@@ -160,32 +155,27 @@ localparam  SET_HOUR = 2'b00;
 localparam  SET_MINUTE = 2'b01;
 localparam  SET_SECOND = 2'b10;
 //定义时分秒计数脉冲状态机
-reg [1:0]   current_set = SET_HOUR;
+reg [1:0]   current_set;
 //定义时分秒计数信号脉冲
-reg sec_pulse = 1'b0;
-reg min_pulse = 1'b0;
-reg hour_pulse = 1'b0;
-//每次set_en使能（上跳沿），对current_set重置为SET_HOUR
-reg set_en_prev;// 对 set_en 采用跳沿检测，每次 set_en 使能进入 LOAD_EDIT 模式，就重置本状态机选择的时钟位
+reg sec_pulse;
+reg min_pulse;
+reg hour_pulse;
+//每次 set_en 使能（上跳沿）进入 LOAD_EDIT 模式，对 current_set 重置为 SET_HOUR, 使本状态机选择的时钟位
+reg set_en_prev = 1'b0;
+always@(posedge sys_clk) set_en_prev <= set_en;
 
 //状态机、时分秒计数脉冲产生
 always@(posedge sys_clk)
 begin
     if(!rst_n)
     begin
-        set_en_prev     <= 1'b0;
-        current_set     <= SET_HOUR;
         sec_pulse <= 1'b0;
         min_pulse <= 1'b0;      
-        hour_pulse <= 1'b0;         
+        hour_pulse <= 1'b0;    
+        twinkle <= TWINKLE_HOUR;
+        current_set <= SET_HOUR;        
     end
     else begin
-        // 每次 set_en 使能进入 LOAD_EDIT 模式，就默认选择 SET_HOUR
-        set_en_prev <= set_en;
-        if(set_en_prev==1'b0 && set_en==1'b1)
-            current_set <=  SET_HOUR;
-        // 上面这部分综合以后，相当于是加在了SET_MINUTE、SET_SECOND状态切换到SET_HOUR状态的条件
-        // （可以去看看RTL视图）与在下面加是一样的，但是还是选择夹在前面吧，体现出心路历程
         if(set_en) begin               // 使能状态机的使能信号
             case(current_set)
             SET_HOUR:
@@ -194,15 +184,14 @@ begin
                 min_pulse <= 1'b0;
                 twinkle <= TWINKLE_HOUR;    // 用于控制该数位闪烁
     
-                if((~num_up) || (~num_down))begin
+                if((~num_up) || (~num_down))
                     hour_pulse <= 1'b1;
-                end
-                else if((num_up) || (num_down))
-                    hour_pulse <= 1'b0;
                 else
-                    hour_pulse <= hour_pulse;
-                    
-                if(~choose) current_set <= SET_MINUTE;    // choose低有效
+                    hour_pulse <= 1'b0;
+                
+                // 状态切换
+                if(set_en_prev==1'b0 && set_en==1'b1) current_set <=  SET_HOUR; // 每次 set_en 使能进入 LOAD_EDIT 模式，就默认选择 SET_HOUR
+                else if(~choose) current_set <= SET_MINUTE;    // choose低有效
             end
             SET_MINUTE:
             begin
@@ -214,8 +203,10 @@ begin
                     min_pulse <= 1'b1;
                 else
                     min_pulse <= 1'b0;
-                    
-                if(~choose) current_set <= SET_SECOND;    // choose低有效
+
+                // 状态切换
+                if(set_en_prev==1'b0 && set_en==1'b1) current_set <=  SET_HOUR; // 每次 set_en 使能进入 LOAD_EDIT 模式，就默认选择 SET_HOUR                    
+                else if(~choose) current_set <= SET_SECOND;
             end        
             SET_SECOND:
             begin
@@ -223,20 +214,22 @@ begin
                 hour_pulse <= 1'b0;
                 twinkle <= TWINKLE_SECOND;    // 用于控制该数位闪烁
             
-                    if((~num_up) || (~num_down))
-                        sec_pulse <= 1'b1;
-                    else
+                if((~num_up) || (~num_down))
+                    sec_pulse <= 1'b1;
+                else
                         sec_pulse <= 1'b0;
         
-                if(~choose) current_set <= SET_HOUR;//    choose低有效
+                // 状态切换
+                if(set_en_prev==1'b0 && set_en==1'b1) current_set <=  SET_HOUR; // 每次 set_en 使能进入 LOAD_EDIT 模式，就默认选择 SET_HOUR
+                else if(~choose) current_set <= SET_HOUR;
             end        
             default: 
             begin
-                set_en_prev     <= 1'b0;
-                current_set     <= SET_HOUR;
                 sec_pulse <= 1'b0;
                 min_pulse <= 1'b0;      
                 hour_pulse <= 1'b0; 
+                twinkle <= TWINKLE_HOUR;
+                current_set <= SET_HOUR;
             end
         
             endcase
@@ -249,23 +242,23 @@ end
 
 //  ====================  在 mode_en 使能的跳沿，产生置数信号，将 clock 的值置数到 load_num 界面  ====================
 // 对mode_en采用跳沿检测，用于“从 clock 切换到 load_num 时”，对 load_num 界面的值进行置数
-reg mode_en_prev;
+reg mode_en_prev = 1'b0;    // mode_en 为高有效，故初值默认为低电平-不使能
 always@(posedge sys_clk) mode_en_prev <= mode_en;
 // 置数信号，用于 radix_hour 进制决断
-reg load_before = 1'b0;
+reg load_before;
 always@(posedge sys_clk)
 begin
     if(!rst_n)
         load_before  <= 1'b0;
     else begin
-        if(mode_en_prev==1'b0 && mode_en==1'b1)
+        if(~mode_en_prev && mode_en)
             load_before <= 1'b0;// clock状态
         else
             load_before <= 1'b1;// load_num状态
     end
 end
 // 延迟一拍置数，用于 counter
-reg load_before_d;
+reg load_before_d = 1'b0;
 always@(posedge sys_clk) load_before_d <= load_before;
 // 踩坑记录
 // load_num被置数时进制显示bug
@@ -305,14 +298,14 @@ always@(posedge sys_clk) load_before_d <= load_before;
 //定义进位信号中间值
 wire    [5:0]   RCO;
 //定义置数中间值
-wire [7:0]   load_hour;             // counter 模块直接输出的值
-wire [7:0]   load_minute;           // LOAD_EDIT 模式下赋值给 ready_*
-wire [7:0]   load_second;           // 确认置数时赋值给 data_*
+wire [7:0]   load_hour;     // counter 模块直接输出的值
+wire [7:0]   load_minute;   // LOAD_EDIT 模式下赋值给 ready_*
+wire [7:0]   load_second;   // 确认置数时赋值给 data_*
 wire [5:0]   load_point;
 //定义置数值显示中间值
-reg  [7:0]   ready_hour = 8'b00;    // 这些“中间值”是 LOAD_EDIT 模式下，数字的显示，经 MUX 直接连接 disp_* (即 disp_hour 等)
-reg  [7:0]   ready_minute = 8'b00;  // 受到“闪烁”逻辑的赋值，假如 hour 被选中，则 ready_hour 前半秒灭，后半秒显示 load_hour
-reg  [7:0]   ready_second = 8'b00;
+reg  [7:0]   ready_hour;    // 这些“中间值”是 LOAD_EDIT 模式下，数字的显示，经 MUX 直接连接 disp_* (即 disp_hour 等)
+reg  [7:0]   ready_minute;  // 受到“闪烁”逻辑的赋值，假如 hour 被选中，则 ready_hour 前半秒灭，后半秒显示 load_hour
+reg  [7:0]   ready_second;
 
 //定义中间变量，设置“时”的个位的进制
 reg  [3:0]   radix_hour;
@@ -341,9 +334,9 @@ end
 
 // 进制最终决定
 // 注意：由于个位的进制是由两个 always 块决定，信号流水线式传递，所以第二级 always 要接收延迟一拍的 num_up num_down
-reg num_up_d;
+reg num_up_d = 1'b1;
+reg num_down_d = 1'b1;
 always@(posedge sys_clk)    num_up_d <= num_up;
-reg num_down_d;
 always@(posedge sys_clk)    num_down_d <= num_down;
 always@(posedge sys_clk)
 begin
@@ -381,7 +374,7 @@ end
 // 由于小时个位进制的决定由两个 always 块决定，所以其 hour_pulse 也要延迟一个时钟周期
 // 小时十位不必像 alarm 一样加延迟，因为 load_num 不存在 edit_hour==8'hFF 导致的进制 radix_hour_lo 残留 F 或类似的情况
 // alarm 中的 radix_hour_lo （小时低位的进制）对应本模块 radix_hour
-reg hour_pulse_d;
+reg hour_pulse_d = 1'b0;
 always@(posedge sys_clk)    hour_pulse_d <= hour_pulse;
 //实例化
 counter sec0(sys_clk,sec_pulse, rst_n,load_before_d,before_second[3:0],4'b1001,   1'b1  ,1'b0,count_direction,load_second[3:0],RCO[0],load_point[0]),
@@ -414,19 +407,19 @@ else begin
         begin
             ready_minute <= load_minute; ready_second <= load_second;
             if(sec_clk)         ready_hour <= {SHOW_EMPTY,SHOW_EMPTY};
-            else if(~sec_clk)   ready_hour <= load_hour; // sec_clk高电平时输出正常数字，低电平时传入31，即全灭
+            else if(~sec_clk)   ready_hour <= load_hour; // sec_clk 低电平时输出正常数字，高电平时传入 4'hE ，即全灭
         end
         TWINKLE_MINUTE:
         begin
             ready_hour <= load_hour; ready_second <= load_second;
             if(sec_clk)         ready_minute <= {SHOW_EMPTY,SHOW_EMPTY};
-            else if(~sec_clk)   ready_minute <= load_minute; // sec_clk高电平时输出正常数字，低电平时传入31，即全灭
+            else if(~sec_clk)   ready_minute <= load_minute;
         end
         TWINKLE_SECOND:
         begin
             ready_hour <= load_hour; ready_minute <= load_minute;
             if(sec_clk)         ready_second <= {SHOW_EMPTY,SHOW_EMPTY};
-            else if(~sec_clk)   ready_second <= load_second; // sec_clk高电平时输出正常数字，低电平时传入31，即全灭    
+            else if(~sec_clk)   ready_second <= load_second;   
         end
         default: begin  // 与TWINKLE_HOUR相同
             ready_minute <= load_minute; ready_second <= load_second;

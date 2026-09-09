@@ -106,7 +106,7 @@ module sys_divider #(
             // 每次跳变对应恰好过了1秒，pulse_out 高电平仅持续1个sys_clk周期(20ns)
             pulse_1ms <= ms_flag_sync2  ^ ms_flag_sync3;
             
-            pulse_1s  <= sec_flag_sync2 && ~sec_flag_sync3;   // 一定是下降沿检测，这样的话就符合我对 clock 模式下小数点与秒的配合：前半秒小数点亮、后半秒灭
+            pulse_1s  <= sec_flag_sync2 && ~sec_flag_sync3;   // 一定是上升沿检测，这样的话就符合我对 clock 模式下小数点与秒的配合：前半秒小数点亮、后半秒灭
             
             sec_clk   <= sec_flag_sync2;
         end

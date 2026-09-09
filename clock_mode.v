@@ -52,7 +52,7 @@
 //
 //      时序流程：
 //        a) alarm.v 每 1 秒检测所有使能闹钟。匹配时 alarm_ring_en 拉高 1 个 sec_clk 周期，
-//           同时用 index_beep 记录是第几组闹钟触发了。
+//           同时用 beep_idx 记录是第几组闹钟触发了。
 //        b) clock_mode 收到 alarm_ring_en → counter_beep 从 0 开始自增（pulse_1s 驱动）
 //           → beep_en = if(counter_beep > 0) = 1
 //           → 状态机 cs 从 MODE_CLOCK 切换到 MODE_BEEP（见三段式状态机第二段）
@@ -175,9 +175,9 @@ btn_debounce #(.DEBOUNCE_MS(20))
     clock_mode_btn_debounce_num_down (sys_clk, pulse_1ms, rst_n, num_down, num_down_db),
     clock_mode_btn_debounce_load     (sys_clk, pulse_1ms, rst_n, load, load_db);
 // choose_db num_up_db num_down_db 脉冲产生
-reg choose_pulse = 1'b1;    // 这个 choose 信号专供 load_num, 因为该模块的 choose 没有长短按需求，
-reg num_up_pulse = 1'b1;                                    //直接用 choose_db 产生脉冲，用户使用体验比用 load_short_pulse 更好
-reg num_down_pulse = 1'b1;
+reg choose_pulse;    // 这个 choose 信号专供 load_num, 因为该模块的 choose 没有长短按需求，
+reg num_up_pulse;                                    //直接用 choose_db 产生脉冲，用户使用体验比用 load_short_pulse 更好
+reg num_down_pulse;
 //采用跳沿检测，采集到下跳沿即产生脉冲
 reg choose_prev = 1'b1;
 reg num_up_prev = 1'b1;
@@ -220,8 +220,8 @@ clock_mode_btn_duration_load
 reg     load_short_pulse;
 reg     load_long_pulse;
 // 记录上次长短按信号，以便产生脉冲
-reg    load_short_prev;
-reg    load_long_prev;
+reg    load_short_prev = 1'b1;
+reg    load_long_prev = 1'b1;
 // 长短按 load 脉冲产生                    
 always@(posedge sys_clk)    load_short_prev <= load_short;
 always@(posedge sys_clk)    load_long_prev  <= load_long;
@@ -250,8 +250,8 @@ clock_mode_btn_duration_choose
     .long_press     (choose_long) 
 );
 //将 choose 的两个信号转化成脉宽等于系统时钟的脉冲
-reg choose_short_pulse = 1'b1;
-reg choose_long_pulse = 1'b1;
+reg choose_short_pulse;
+reg choose_long_pulse;
 //采用跳沿检测，采集到下跳沿即产生脉冲
 reg choose_short_prev = 1'b1;
 reg choose_long_prev = 1'b1;
@@ -285,8 +285,8 @@ end
 // 对状态进行选择 单按load选择时钟、置数、闹钟模式，长按确认置数、闹钟的输入
 
 // 置数模式、闹钟模式使能信号，时钟模式不需要
-reg mode_load_en = 1'b0;
-reg mode_alarm_en = 1'b0;
+reg mode_load_en;
+reg mode_alarm_en;
 // 对不同模式的输入输出进行控制
 // 输入控制
 // 时钟模式
@@ -344,10 +344,10 @@ localparam  MODE_BEEP  = 2'b11;
 reg [1:0]   cs, ns;
 
 
-// load_num、alarm模式：若15秒内无按键输入，自动切换回clock模式
+// load_num 模式：若15秒内无按键输入，自动切换回clock模式
 // 由于 LOAd 的显示，实际在置数页面只能显示约14秒
 parameter COUNTER_15S_TIME = 15;     // 超时时间15秒
-reg [$clog2(COUNTER_15S_TIME)-1:0]  counter_15s = 0;
+reg [$clog2(COUNTER_15S_TIME)-1:0]  counter_15s;
 localparam COUNTER_15S_COUNT = COUNTER_15S_TIME;      // 15秒计数值
 // ⚠ 踩坑警示：这里时间=走过的间隔数=计数值，值域0~15含16个状态但只递增15次=15秒；
 // 计数器counter的0是有效状态，循环一圈(0→9→0)才算满，此处0只是起点不占时间，故COUNT=TIME=15，不是"16个数"。
@@ -389,7 +389,7 @@ begin
     MODE_CLOCK: begin
         if(~load_short_pulse)
             ns = MODE_LOAD;
-        else if(beep_en)  // 仅在clock模式下，出现闹钟使能信号后，才会切换到 MODE_BEEP 的显示
+        else if(beep_en)  // 仅在clock模式下，出现闹钟使能信号后，才会切换到 MODE_BEEP 的显示，避免鸣响界面打断置数/闹钟操作。
             ns = MODE_BEEP;
         else 
             ns = MODE_CLOCK;
@@ -420,7 +420,7 @@ begin
         else if(beep_en)
             ns = MODE_BEEP;
         else
-            ns = MODE_CLOCK;
+            ns = MODE_CLOCK;    // 组合逻辑必须写 else 避免 latch 产生
     end
 
     default:ns = MODE_CLOCK;
@@ -453,6 +453,8 @@ begin
         disp_point  <= disp_point_clock ; 
         disp_point_twinkle_en <= 1'b1;
         alarm_beep_disp_en    <= 1'b0;
+        // 计时控制
+        counter_15s <= 0;
     end
     else begin
         case(cs)
@@ -480,6 +482,8 @@ begin
             disp_point  <= disp_point_clock ;
             disp_point_twinkle_en <= 1'b1;
             alarm_beep_disp_en    <= 1'b0;
+            // 计时控制
+            counter_15s <= 0;
         end
         
         MODE_LOAD:
@@ -550,6 +554,8 @@ begin
             disp_point  <= disp_point_alarm ;
             disp_point_twinkle_en <= 1'b0;
             alarm_beep_disp_en    <= 1'b0;
+            // 计时控制
+            counter_15s <= 0;
         end
         
         MODE_BEEP:
@@ -576,6 +582,8 @@ begin
             disp_point  <= disp_point_alarm ;
             disp_point_twinkle_en <= 1'b0;
             alarm_beep_disp_en    <= 1'b1;  // 让 alarm 显示当前鸣响的闹钟的时间
+            // 计时控制
+            counter_15s <= 0;
         end
             
         default:    //default：时钟模式
@@ -602,6 +610,8 @@ begin
             disp_point  <= disp_point_clock ;
             disp_point_twinkle_en <= 1'b1;
             alarm_beep_disp_en    <= 1'b0;
+            // 计时控制
+            counter_15s <= 0;
         end 
 
         endcase
@@ -706,12 +716,12 @@ begin
         counter_beep <= 0;
     else if(pulse_1s && alarm_ring_en)
         counter_beep <= counter_beep + 1'b1;
-    else if(pulse_1s && (counter_beep == CNT_BEEP) )
-        counter_beep <= 0;
-    else if(pulse_1s && counter_beep > 0)
-        counter_beep <= counter_beep + 1'b1;
-end
-always@(counter_beep or beep_en)
+    else if(pulse_1s && (counter_beep >= CNT_BEEP) )    // 这里说一种极端情况：如果上一个闹钟的鸣响时间到了 counter_beep = CNT_BEEP ，
+        counter_beep <= 0;                          // 此时恰好下一个闹钟也到了 alarm_ring_en=1, 按照现在的逻辑，后者的分支优先，
+    else if(pulse_1s && counter_beep > 0)           // 会执行加计数, counter_beep 在下一秒被清零，因此会只多响1秒，后一个闹钟相当于没响。
+        counter_beep <= counter_beep + 1'b1;        // 如果想改成：下一个闹钟来的时候, counter_beep 启动新一轮计数，那么需要：
+end                                         // 1. 将清零分支改成 counter_beep == CNT_BEEP 2. 在清零之前、自增(counter_beep > 0分支)之后
+always@(*)                                  // 添加(pulse_1s && (counter_beep >CNT_BEEP))，内容是 counter_beep <= 1; 
 begin
     if(counter_beep > 0)
         beep_en = 1'b1;

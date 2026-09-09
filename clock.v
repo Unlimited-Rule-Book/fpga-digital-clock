@@ -55,7 +55,7 @@ output  wire    [5:0]   point_out
    有效手段是用延迟1拍的置数信号代替现在接入 counter 的置数信号 load ，并同步修改进制判断逻辑
 */
 // 定义并实现 load 的延迟信号
-reg load_d;
+reg load_d = 1'b1;
 always@(posedge sys_clk) load_d  <= load;
 // 定义小时个位进制
 reg [3:0]   radix_hour;

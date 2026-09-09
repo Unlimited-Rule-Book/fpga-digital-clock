@@ -16,9 +16,9 @@
 module counter
 (      
 input   wire    sys_clk,            // 系统时钟
-input   wire    sec_pulse,          // 周期为 1 second 的脉冲，脉宽与系统时钟相等
+input   wire    sec_pulse,          // 周期为 1 second 的脉冲 或按键脉冲，脉宽与系统时钟相等
 input   wire    rst_n,              // 同步清零，低电平有效
-input   wire    load,               // 同步置数，下降沿有效
+input   wire    load,               // 同步置数，低电平有效
 input   wire    [3:0]   load_data,  // 置数时加载进模块的数值
 input   wire    [3:0]   radix_data, // 计数器在计到哪一个数时同步清零，如十进制传入9，六进制传入5
 input   wire    RCO_last,           // 前一位（前一个 counter 模块）的进位信号 RCO （最低位固定接1'b1）

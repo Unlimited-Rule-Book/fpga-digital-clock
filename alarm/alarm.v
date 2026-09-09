@@ -59,9 +59,9 @@ input   wire    [7:0]   now_minute,
 input   wire    [7:0]   now_hour,
 input   wire    alarm_beep_disp_en,
 
-output  wire    [7:0]   disp_state,     // 置数模式下，数码管的显示
-output  wire    [7:0]   disp_hour,      // 涵盖 LOAd 、置数值的显示
-output  wire    [7:0]   disp_minute,    // 赋值逻辑在 data_* 的上方
+output  wire    [7:0]   disp_state,     // 闹钟编号 + E/d (是否使能)
+output  wire    [7:0]   disp_hour,      // 闹钟的 hour 显示
+output  wire    [7:0]   disp_minute,    // 闹钟的 minute 显示
 output  wire    [5:0]   point_out,      // 既然是要控制数码管的显示，那就得加上小数点了
 output  wire    alarm_view_en,          // 闹钟的状态在 ALARM_VIEW, 短按 load 可以返回时钟模式；在 ALARM_EDIT, 短按 load 无法切换
 output  reg     alarm_ring_en           // 到了闹钟的时间，拉高信号给顶层的 beep_song, 响铃
@@ -69,13 +69,13 @@ output  reg     alarm_ring_en           // 到了闹钟的时间，拉高信号�
 
 //  ====================  数码管显示控制状态机  ====================
 //定义数码管显示状态机的状态
-localparam  ALARM_VIEW = 1'b0;  //VIEW浏览状态
-localparam  ALARM_EDIT = 1'b1;  //EDIT编辑状态
+localparam  ALARM_VIEW = 1'b0;  // VIEW 浏览状态
+localparam  ALARM_EDIT = 1'b1;  // EDIT 编辑状态
 //定义数码管显示状态机
-reg current_alarm = ALARM_VIEW;
+reg current_alarm;
 //定义浏览状态使能信号、置数使能信号
-reg view_en = 1'b0;
-reg set_en = 1'b0;
+reg view_en;
+reg set_en;
 //将 view_en 输出，在顶层 clock_mode 里用作切换回 clock 模式的使能
 assign alarm_view_en = view_en;
 //定义闹钟界面的字母显示
@@ -182,7 +182,7 @@ bin2bcd_param #( .BIN_WIDTH($clog2(ALARM_CNT)) ) alarm_bin2bcd_param(
 
 // 数字闪烁状态机变量证明，该状态机在“实例化 counter ”的下面
 // 没错，这不是此状态机的变量声明，而是下一个与本状态机配合的状态机的声明！！
-reg [1:0]   twinkle = 2'b0;
+reg [1:0]   twinkle;
 localparam  TWINKLE_STATE  = 2'b00;
 localparam  TWINKLE_HOUR   = 2'b01;
 localparam  TWINKLE_MINUTE = 2'b10;
@@ -192,14 +192,14 @@ localparam  SET_STATE  = 2'b00;
 localparam  SET_HOUR = 2'b01;
 localparam  SET_MINUTE = 2'b10;
 //定义时分秒计数脉冲状态机
-reg [1:0]   current_set = SET_STATE;
+reg [1:0]   current_set;
 //定义时分秒计数信号脉冲
-reg hour_pulse = 1'b0;
-reg min_pulse = 1'b0;
+reg hour_pulse;
+reg min_pulse;
 //定义闹钟状态——闹钟是否使能（开启）
 reg edit_state;
 //每次 set_en 使能（上跳沿），对 current_set 重置为 SET_STATE
-reg set_en_prev;// 对 set_en 采用跳沿检测，每次 set_en 使能进入 ALARM_EDIT 模式，就重置本状态机选择的时钟位（下面有进一步的解释）
+reg set_en_prev = 1'b0;// 对 set_en 采用跳沿检测，每次 set_en 使能进入 ALARM_EDIT 模式，就重置本状态机选择的时钟位（下面有进一步的解释）
 always@(posedge sys_clk) set_en_prev <= set_en;
 
 //状态机-时分秒计数脉冲产生
@@ -207,20 +207,13 @@ always@(posedge sys_clk)
 begin
     if(!rst_n)
     begin
-        current_set     <= SET_STATE;
         edit_state <= alarm_mem[alarm_num][16]; 
         hour_pulse <= 1'b0;
         min_pulse <= 1'b0;      
-       
+        twinkle <= TWINKLE_STATE;
+        current_set <= SET_STATE;
     end
     else begin
-        // 每次 set_en 使能进入 ALARM_EDIT 模式，就默认选择 SET_STATE ，并且将该闹钟的状态赋给中间变量
-        if(set_en_prev==1'b0 && set_en==1'b1) begin
-            current_set <=  SET_STATE;
-            edit_state <= alarm_mem[alarm_num][16];
-        end
-        // 上面这部分综合以后，相当于是加在了SET_HOUR、SET_MINUTE状态切换到SET_STATE状态的条件
-        // （可以去看看RTL视图）与在下面加是一样的，但是还是选择夹在前面吧，体现出心路历程
         if(set_en) begin               // 使能状态机的使能信号
             case(current_set)
             SET_STATE:
@@ -228,44 +221,66 @@ begin
                 hour_pulse <= 1'b0;
                 min_pulse <= 1'b0;
                 twinkle <= TWINKLE_STATE;    // 用于控制该数位闪烁
-    
                 if((~num_up) || (~num_down))
                     edit_state <= ~edit_state;
                     
-                if(~choose) current_set <= SET_HOUR;    // choose 低有效
+                // 状态切换
+                if(set_en_prev==1'b0 && set_en==1'b1) begin // 每次 set_en 使能进入 ALARM_EDIT, 就默认选择 SET_STATE, 并显示闹钟状态
+                    current_set <=  SET_STATE;
+                    edit_state <= alarm_mem[alarm_num][16];
+                end
+                else if(~choose)    // choose 低有效
+                    current_set <= SET_HOUR;
+                else
+                    current_set <= SET_STATE;
             end
             SET_HOUR:
             begin
                 edit_state <= edit_state;
                 min_pulse <= 1'b0;
-                twinkle <= TWINKLE_HOUR;    // 用于控制该数位闪烁
-    
+                twinkle <= TWINKLE_HOUR;    // 用于控制该数位闪烁 
                 if((~num_up) || (~num_down))
                     hour_pulse <= 1'b1;
                 else
                     hour_pulse <= 1'b0;
                     
-                if(~choose) current_set <= SET_MINUTE;
+                // 状态切换    
+                if(set_en_prev==1'b0 && set_en==1'b1) begin // 每次 set_en 使能进入 ALARM_EDIT, 就默认选择 SET_STATE, 并显示闹钟状态
+                    current_set <=  SET_STATE;
+                    edit_state <= alarm_mem[alarm_num][16];
+                end
+                else if(~choose)
+                    current_set <= SET_MINUTE;
+                else
+                    current_set <= SET_HOUR;
             end        
             SET_MINUTE:
             begin
                 edit_state <= edit_state;
                 hour_pulse <= 1'b0;
                 twinkle <= TWINKLE_MINUTE;    // 用于控制该数位闪烁
-            
                 if((~num_up) || (~num_down))
                     min_pulse <= 1'b1;
                 else
                     min_pulse <= 1'b0;
         
-                if(~choose) current_set <= SET_STATE;
+                // 状态切换
+                if(set_en_prev==1'b0 && set_en==1'b1) begin // 每次 set_en 使能进入 ALARM_EDIT, 就默认选择 SET_STATE, 并显示闹钟状态
+                    current_set <=  SET_STATE;
+                    edit_state <= alarm_mem[alarm_num][16];
+                end
+                else if(~choose)
+                    current_set <= SET_STATE;
+                else
+                    current_set <= SET_MINUTE;
             end        
             default: 
             begin
-                current_set     <= SET_STATE;
                 edit_state <= alarm_mem[alarm_num][16];
                 hour_pulse <= 1'b0;    
                 min_pulse <= 1'b0;
+                twinkle <= TWINKLE_STATE;
+                current_set <= SET_STATE;
             end
             endcase
         end
@@ -284,13 +299,13 @@ always@(posedge sys_clk)  choose_edit_delay <= choose_edit;
 //定义进位信号中间值
 wire    [5:0]   RCO;
 //定义置数中间值
-wire [7:0]   edit_hour;             // counter 模块直接输出的值
-wire [7:0]   edit_minute;           // ALARM_EDIT 模式下赋值给 ready_*
+wire [7:0]   edit_hour;     // counter 模块直接输出的值
+wire [7:0]   edit_minute;   // ALARM_EDIT 模式下赋值给 ready_*
 wire [5:0]   load_point;
 //定义置数值显示中间值
-reg  [7:0]   ready_state = 8'b00;   // 这些“中间值”是 ALARM_EDIT 模式下，数字的显示，经 MUX 直接连接 disp_* (即 disp_state 等)
-reg  [7:0]   ready_hour = 8'b00;    // 受到“闪烁”逻辑的赋值，假如 hour 被选中，则 ready_state 前半秒灭，后半秒显示 edit_hour
-reg  [7:0]   ready_minute = 8'b00;
+reg  [7:0]   ready_state;   // 这些“中间值”是 ALARM_EDIT 模式下，数字的显示，经 MUX 直接连接 disp_* (即 disp_state 等)
+reg  [7:0]   ready_hour;    // 受到“闪烁”逻辑的赋值，假如 hour 被选中，则 ready_state 前半秒灭，后半秒显示 edit_hour
+reg  [7:0]   ready_minute;
 
 //定义中间变量，设置“时”的个位的进制
 reg  [3:0]   radix_hour_lo;
@@ -326,9 +341,9 @@ begin
 end
 
 // 注意：由于个位的进制是由两个 always 块决定，信号流水线式传递，所以第二级 always 要接收延迟一拍的 num_up num_down
-reg num_up_d;
+reg num_up_d = 1'b1;
+reg num_down_d = 1'b1;
 always@(posedge sys_clk)    num_up_d <= num_up;
-reg num_down_d;
 always@(posedge sys_clk)    num_down_d <= num_down;
 // 小时个位进制动态显示，决断块
 always@(posedge sys_clk)
@@ -414,7 +429,7 @@ end
         根本原因：十位要同时满足 个位的进位信号+秒脉冲才会计数，
         但是原代码中，计数使能脉冲 hour_pulse 比进位信号 RCO[4] 提前一拍到来，故十位计数保持2不变
 */
-reg hour_pulse_d;
+reg hour_pulse_d = 1'b0;
 always@(posedge sys_clk)    hour_pulse_d <= hour_pulse;
 // ALARM_EDIT 状态下的计数器
 // 在 用户长按 choose 即 choose_edit 低电平脉冲到来时，将用户要编辑的闹钟的时间 置数 到 counter ，进而输出到数码管。
@@ -449,19 +464,19 @@ else begin
         begin
             ready_hour <= edit_hour;         ready_minute <= edit_minute;
             if(sec_clk)         ready_state <= {alarm_num_bcd,SHOW_EMPTY};
-            else if(~sec_clk)   ready_state <= ready_state_show; // sec_clk 高电平时输出正常数字，低电平时传入31，即全灭
+            else if(~sec_clk)   ready_state <= ready_state_show;
         end
         TWINKLE_HOUR:
         begin
             ready_state <= ready_state_show; ready_minute <= edit_minute;
             if(sec_clk)         ready_hour <= {SHOW_EMPTY,SHOW_EMPTY};
-            else if(~sec_clk)   ready_hour <= edit_hour;        // sec_clk 高电平时输出正常数字，低电平时传入31，即全灭
+            else if(~sec_clk)   ready_hour <= edit_hour;     // sec_clk 低电平时输出正常数字，低电平时传入4'd14，即全灭
         end
         TWINKLE_MINUTE:
         begin
             ready_state <= ready_state_show; ready_hour <= edit_hour;
             if(sec_clk)         ready_minute <= {SHOW_EMPTY,SHOW_EMPTY};
-            else if(~sec_clk)   ready_minute <= edit_minute;    // sec_clk 高电平时输出正常数字，低电平时传入31，即全灭    
+            else if(~sec_clk)   ready_minute <= edit_minute;   
         end
         default: begin  // 与TWINKLE_STATE相同
             ready_hour <= edit_hour; ready_minute <= edit_minute;
@@ -477,7 +492,7 @@ end
 
 //  ====================  闹钟鸣响时，如果顶层处于 CLOCK 状态，则会给 alarm_beep_disp_en 使能, alarm 输出鸣响的闹钟的时间并闪烁  ====================
 // 1秒亮1秒灭，慢点闪烁，便于观察
-reg sec_clk_prev;
+reg sec_clk_prev = 1'b1;
 always@(posedge sys_clk)     sec_clk_prev <= sec_clk;
 // 进行二分频
 reg sec_clk_div;

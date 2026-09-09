@@ -19,16 +19,16 @@ input   wire    rst_n,
 input   wire    [5:0]   sel,
 input   wire    [7:0]   seg,
 
-output  reg     stcp,           //数据存储时钟
-output  reg     shcp,           //移位寄存器时钟，hc595的刷新时钟有频率限制，此处采用系统时钟4分频后12.5MHz的时钟
-output  reg     ds,             //串行数据输入
-output  wire    oe              //使能信号，低电平有效
+output  reg     stcp,       //数据存储时钟
+output  reg     shcp,       //移位寄存器时钟，hc595的刷新时钟有频率限制，此处采用系统时钟4分频后12.5MHz的时钟
+output  reg     ds,         //串行数据输入
+output  wire    oe          //使能信号，低电平有效
 );
 
 //定义中间变量
-reg     [1:0]   cnt_4 = 2'b00;  //4分频计数器
-reg     [3:0]   cnt_bit = 4'b0; //传输位数计数器，一共要传14位数
-wire    [13:0]  data;           //数码管信号寄存
+reg     [1:0]   cnt_4;      //4分频计数器
+reg     [3:0]   cnt_bit;    //传输位数计数器，一共要传14位数
+wire    [13:0]  data;       //数码管信号寄存
 
 //让使能信号使能
 assign  oe = 1'b0;

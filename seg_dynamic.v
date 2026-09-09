@@ -24,8 +24,8 @@
 module seg_dynamic
 (
 input   wire    sys_clk,
-input   wire    pulse_1ms,              // 数码管扫描时钟，1ms为周期，来自 sys_divider
-input   wire    sec_clk,                // 为实现数码管以1s为周期闪烁
+input   wire    pulse_1ms,      // 数码管扫描时钟，1ms为周期，来自 sys_divider
+input   wire    sec_clk,        // 为实现数码管以1s为周期闪烁
 input   wire    rst_n,
 input   wire    [7:0]   out_second,
 input   wire    [7:0]   out_minute,
@@ -33,15 +33,15 @@ input   wire    [7:0]   out_hour,
 input   wire    [5:0]   point_out,
 input   wire    point_out_twinkle_en,
 
-output  reg     [5:0]   sel = 6'b11_1111,   // 数码管位选信号，初值为选中所有数码管
-output  reg     [7:0]   seg = 8'b0          // 数码管段选信号，初值为点亮数码管的所有段
+output  reg     [5:0]   sel,    // 数码管位选信号，初值为选中所有数码管
+output  reg     [7:0]   seg     // 数码管段选信号，初值为点亮数码管的所有段
 );
 //  ====================  定义中间变量  ====================
 //定义中间变量——数码管数据显示
-reg     [2:0]   cnt_sel = 3'b0;         // 位选信号计数器
-reg     [3:0]   data_disp = 4'b0;       // 为了避免case语句嵌套，增强可读性，定义此变量位段选信号生成的中间变量，此变量不包含小数点
+reg     [2:0]   cnt_sel;         // 位选信号计数器
+reg     [3:0]   data_disp;       // 为了避免case语句嵌套，增强可读性，定义此变量位段选信号生成的中间变量，此变量不包含小数点
 //定义锁存器——存储sec_clk在seg_clk的上一周期的值
-reg     point_disp = 1'b0;              // 当前数码管显示的小数点
+reg     point_disp;              // 当前数码管显示的小数点
 
 //  ====================  主程序  ====================
 //cnt_sel:位选信号计数器
@@ -78,10 +78,10 @@ end
 always@(posedge sys_clk)
 begin
     if(~rst_n)
-        point_disp <= 1'b1; // 默认小数点熄灭
+        point_disp <= 1'b0; // 默认小数点点亮
     else if(~point_out_twinkle_en            && pulse_1ms)    point_disp <= ~point_out[cnt_sel];
     else if(point_out_twinkle_en && sec_clk  && pulse_1ms)    point_disp <= ~point_out[cnt_sel];
-    else if(point_out_twinkle_en && ~sec_clk && pulse_1ms)    point_disp <= 1'b1;
+    else if(point_out_twinkle_en && ~sec_clk && pulse_1ms)    point_disp <= 1'b1;   // 小数点熄灭
     else                                                     point_disp <= point_disp;
 end
 
@@ -111,7 +111,7 @@ begin
         4'd12:  seg =   {point_disp,7'b010_0001};   //显示字母d
         4'd13:  seg =   {point_disp,7'b000_0110};   //显示字母E
         4'd14:  seg =   {point_disp,7'b111_1111};   //全灭
-        4'd15:  seg =   {point_disp,7'b011_1111};   //显示负号  // 依照现在alarm中小时个位加计数进制的逻辑，“负号”的编码必须是F，编码必须是4位，使得加计数能够溢出清零！
+        4'd15:  seg =   {point_disp,7'b011_1111};   //显示负号  // 依照现在 alarm 中小时个位加计数进制的逻辑，“负号”的编码必须是F，编码必须是4位，使得加计数能够溢出清零！
 
         // 请看上方对data_disp复制的case语句，这种逻辑下，disp最大只能是4位宽，无法被赋予15以上的值！！
         // 所以只能根据现有的需求，将需要的编码，不需要的只能舍弃

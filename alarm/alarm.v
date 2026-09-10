@@ -10,7 +10,7 @@
 //      编辑状态下先选中使能状态（可翻转），再选 hour，再选 minute
 //   4. 编辑完成后长按 load （ load_confirm ）将编辑值写入对应闹钟 alarm_mem
 //      短按 load 取消编辑，返回浏览状态
-//   5. 时间匹配：每 1 秒（ sec_clk 上升沿）检测所有使能闹钟是否匹配当前时间，
+//   5. 时间匹配：每 1 秒（ sec_clk 下降沿）检测所有使能闹钟是否匹配当前时间，
 //      匹配时拉高 alarm_ring_en （维持1秒），由 clock_mode 触发蜂鸣器
 //   6. 鸣响显示：当 clock_mode 拉高 alarm_beep_disp_en 时，
 //      本模块通过 beep_idx 找到正在鸣响的闹钟，
@@ -26,14 +26,14 @@
 //   · ALARM_VIEW 模式（ mode_en=1 ）：输出当前浏览闹钟的编号+使能状态+时间
 //   · ALARM_EDIT 模式（ mode_en=1 ）：输出编辑中的值（含选中位闪烁）
 //   · 鸣响显示模式（ mode_en=0, alarm_beep_disp_en=1）：输出 beep_idx 所指闹钟的时间（以 sec_clk_div 二分频实现1秒亮/1秒灭慢闪烁，其余位全灭）
-//   · 未使能（ mode_en=0, alarm_beep_disp_en=0）：输出 8'hFF（全亮，在 seg_dynamic中被其他模块的输出覆盖，不可见）
+//   · 未使能（ mode_en=0, alarm_beep_disp_en=0）：输出 8'hFF（负号--，在 seg_dynamic中被其他模块的输出覆盖，不可见）
 //
 // 子模块实例：
 //   counter ×4（分别编辑 hour 个位/十位、minute 个位/十位）
 //   bin2bcd_param ×1（闹钟编号 → BCD 显示）
 //
 // 注意：
-//   1. alarm_ring_en 在 sec_clk 上升沿检测，set 和 clear 在同一时钟沿完成
+//   1. alarm_ring_en 在 sec_clk 下降沿检测， set 和 clear 在同一时钟沿完成
 //      （non-blocking 赋值，时序正确），维持 1 个 sec_clk 周期的高电平
 //   2. choose_edit_delay 延时一拍，确保 counter 读到由 view_num 计算得到的
 //      动态进制值，避免加载 FF 后立即被 counter 修正为 23
@@ -297,7 +297,7 @@ end
 reg choose_edit_delay = 1'b1;
 always@(posedge sys_clk)  choose_edit_delay <= choose_edit;
 //定义进位信号中间值
-wire    [5:0]   RCO;
+wire    [3:0]   RCO;
 //定义置数中间值
 wire [7:0]   edit_hour;     // counter 模块直接输出的值
 wire [7:0]   edit_minute;   // ALARM_EDIT 模式下赋值给 ready_*
@@ -393,7 +393,6 @@ begin
         {radix_min_hi,radix_min_lo} <= 8'b1111_1111;
     else if(edit_minute==8'hFF)
         {radix_min_hi,radix_min_lo} <= 8'b1111_1111;
-        
     else
         {radix_min_hi,radix_min_lo} <= 8'b0101_1001;
 end
@@ -427,20 +426,18 @@ end
             这也是为什么在其它情况下（即 edit_hour 彻底脱离默认值--后），不会出现23→up→20的原因
  流水线 1-2 ≠ 2-2: 23→up→20/00
         根本原因：十位要同时满足 个位的进位信号+秒脉冲才会计数，
-        但是原代码中，计数使能脉冲 hour_pulse 比进位信号 RCO[4] 提前一拍到来，故十位计数保持2不变
+        但是原代码中，计数使能脉冲 hour_pulse 比进位信号 RCO[2] 提前一拍到来，故十位计数保持2不变
 */
 reg hour_pulse_d = 1'b0;
 always@(posedge sys_clk)    hour_pulse_d <= hour_pulse;
 // ALARM_EDIT 状态下的计数器
 // 在 用户长按 choose 即 choose_edit 低电平脉冲到来时，将用户要编辑的闹钟的时间 置数 到 counter ，进而输出到数码管。
 //实例化             
-counter min0(sys_clk,min_pulse, rst_n,choose_edit_delay,view_num[3:0],  radix_min_lo, 1'b1  ,1'b0,count_direction,edit_minute[3:0],RCO[2],load_point[0]),
-        min1(sys_clk,min_pulse, rst_n,choose_edit_delay,view_num[7:4],  radix_min_hi, RCO[2],1'b0,count_direction,edit_minute[7:4],RCO[3],load_point[1]),
+counter min0(sys_clk,min_pulse, rst_n,choose_edit_delay,view_num[3:0],  radix_min_lo, 1'b1  ,1'b0,count_direction,edit_minute[3:0],RCO[0],load_point[0]),
+        min1(sys_clk,min_pulse, rst_n,choose_edit_delay,view_num[7:4],  radix_min_hi, RCO[0],1'b0,count_direction,edit_minute[7:4],RCO[1],load_point[1]),
              
-        hor0(sys_clk,hour_pulse_d,rst_n,choose_edit_delay,view_num[11:8], radix_hour_lo,1'b1  ,1'b1,count_direction,edit_hour[3:0],  RCO[4],load_point[2]),
-        hor1(sys_clk,hour_pulse_d,rst_n,choose_edit_delay,view_num[15:12],radix_hour_hi,RCO[4],1'b0,count_direction,edit_hour[7:4],  RCO[5],load_point[3]);
-// 注：从右往左数第1个数字代表着counter的point_in输入口，此端口其实不需要输入，但是未用的输入端口则必须提供一个确定的值
-// 而最右侧的输出端口 point_out 也不需要，就暂时悬空
+        hor0(sys_clk,hour_pulse_d,rst_n,choose_edit_delay,view_num[11:8], radix_hour_lo,1'b1  ,1'b1,count_direction,edit_hour[3:0],RCO[2],load_point[2]),
+        hor1(sys_clk,hour_pulse_d,rst_n,choose_edit_delay,view_num[15:12],radix_hour_hi,RCO[2],1'b0,count_direction,edit_hour[7:4],RCO[3],load_point[3]);
 assign  load_point[5:4] = 2'b00; // state 两位不显示小数点
 
 
@@ -470,7 +467,7 @@ else begin
         begin
             ready_state <= ready_state_show; ready_minute <= edit_minute;
             if(sec_clk)         ready_hour <= {SHOW_EMPTY,SHOW_EMPTY};
-            else if(~sec_clk)   ready_hour <= edit_hour;     // sec_clk 低电平时输出正常数字，低电平时传入4'd14，即全灭
+            else if(~sec_clk)   ready_hour <= edit_hour;     // sec_clk 低电平时输出正常数字，高电平时传入4'd14，即全灭
         end
         TWINKLE_MINUTE:
         begin
@@ -530,10 +527,12 @@ end
 reg [$clog2(ALARM_CNT):0] alarm_idx;    // 这里的位宽必须为3，否则index计到4会溢出归零，永远达不到index < ALARM_NUM条件，而终止条件必须设为这样，否则检测不到3号闹钟
 always@(posedge sys_clk)
 begin
-    if(!rst_n)
+    if(!rst_n) begin
         alarm_ring_en <= 1'b0;
+        beep_idx <= 0;
+    end
     else begin
-        if(sec_clk && ~sec_clk_prev) begin  // 每1秒检测一次，对 sec_clk 跳沿检测
+        if(~sec_clk && sec_clk_prev) begin  // 每1秒检测一次，对 sec_clk 下跳沿检测
             for (alarm_idx = 1'b0; alarm_idx < ALARM_CNT; alarm_idx = alarm_idx + 1'b1)begin
                 if (alarm_mem[alarm_idx][16])begin
                     if({alarm_mem[alarm_idx][15:0],8'h00} == {now_hour,now_minute,now_second}) begin
@@ -547,22 +546,32 @@ begin
         end
     end
 end
+// alarm_ring_en 采用下降沿检测的原因
+/*
+    因为在 sys_divider 中, pulse_1s 是 sec_flag 上升沿检测，与 sec_clk 的上升沿同拍
+    (pulse_1s 是 counter 的使能, sec_clk 是 alarm_ring_en 的检测时间)
+    所以将 alarm_ring_en 的检测时机设定为为 sec_clk 下降沿匹配：
+    下降沿时，时间已经过了0.5秒，接到 pulse_1s 的 counter 的计数值（经过0.5秒）已经稳定，
+    此时 alarm_ring_en 的判定模块读取到的 now_* 的值就是当前的值。
+*/
 
 
 
 
-// 数显控制，模式为LOAD_SHOW时，显示LOAd；模式为ALARM_EDIT时显示read_*；模式为ALARM_VIEW时显示为全显示（seg_dynamic编码，F 4'd15为全显示）
+// 数显控制，模式为 ALARM_VIEW 时，显示 alarm_mem 的值；模式为 ALARM_EDIT 时显示ready_*；
+//           闹钟响铃时，输出闹钟的时间。
+//           其它情况，输出为负号--（seg_dynamic编码，F 4'd15为负号）
 assign  disp_state  = (mode_en && current_alarm==ALARM_VIEW) ? {alarm_num_bcd, alarm_state_show(alarm_mem[alarm_num][16])} : 
                       (mode_en && current_alarm==ALARM_EDIT) ? ready_state      :
                       (~mode_en&& alarm_beep_disp_en)        ? beep_hour        :
-                      8'hFF;   // 增加完全关闭时的保护：mode_en使能且ALARM_VIEW待机时，或者干脆没使能时，都为FF，seg_dynamic编码为全显示
+                      8'hFF;   // 增加出现其它情况时的保护
 assign  disp_hour   = (mode_en && current_alarm==ALARM_VIEW) ? view_num[15:8]   :   // ALARM_VIEW 时的显示
                       (mode_en && current_alarm==ALARM_EDIT) ? ready_hour       :   // ALARM_EDIT 时的显示
                       (~mode_en&& alarm_beep_disp_en)        ? beep_minute      :   // 闹钟鸣响时的显示
                       8'hFF;
 assign  disp_minute = (mode_en && current_alarm==ALARM_VIEW) ? view_num[7:0]    :   
                       (mode_en && current_alarm==ALARM_EDIT) ? ready_minute     :   
-                      (~mode_en&& alarm_beep_disp_en)        ? beep_second      :   // 本模块端口名 disp_* 对应的是 显示语义 ，而非物理数码管分组 deep_*
+                      (~mode_en&& alarm_beep_disp_en)        ? beep_second      :   // 本模块端口名 disp_* 对应的是 显示语义 ，而非物理数码管分组 beep_*
                       8'hFF;                                                        // 故 disp_minute 应该被 beep_second 赋值 
 assign  point_out   = (~mode_en&& alarm_beep_disp_en)        ? beep_point       :
                       load_point;
@@ -621,7 +630,7 @@ endmodule
 
    按键按下前的状态：edit_hour=FF, radix_hour_lo_up=F, radix_hour_lo_down=3,
                      radix_hour_hi=F, radix_hour_lo=F, count_direction=0
-   ┌ 1   num_down 变低（1 拍脉冲），edit_hour 仍为 FF
+   ┌ 1   num_down 变低（1 拍脉冲）, edit_hour 仍为 FF
    ├ 2   [状态机] if((~num_up)‖(~num_down)) → hour_pulse<=1
    │     [方向锁存块] else if(~num_down) → count_direction<=1
    │     [个位减计数块] else if(edit_hour==8'hFF) → radix_hour_lo_down<=3
@@ -655,7 +664,7 @@ endmodule
    ├ 3   - hour_pulse 变 1（十位计数脉冲，短链先到）；num_up_d 变 0
    ├ 4   [counter·十位] 采样 hour_pulse=1 计数 —— 此刻 radix_hour_lo
    │       沿前值仍 = F → 个位 count_out(3)==radix_hour_lo(F) 不成立
-   │       → RCO_unit=0 （个位还未发出进位信号！！）→ 十位 RCO_last=0 → 十位不动！
+   │       → RCO_unit（即RCO[2],小时个位进位信号）=0 （个位还未发出进位信号！！）→ 十位 RCO_last=0 → 十位不动！
    │     [决定块] else if(SET_HOUR && ~num_up_d) → radix_hour_lo
    │        <= radix_hour_lo_up(=3)（下一拍才可见）
    │     - hour_pulse_d 变 1
@@ -670,8 +679,8 @@ endmodule
 
 /* 流水线2-2 edit_hour: 23 num_up → 00 ｜ 十位接 hour_pulse_d (修复后接法)
 
-   按键按下前的状态：edit_hour=23, radix_hour_lo_up=F（FF 残留）, radix_hour_lo_down=3,
-                     radix_hour_hi=2, radix_hour_lo=F, count_direction=0
+   按键按下前的状态：edit_hour=23, radix_hour_lo_up =F（FF 残留）, radix_hour_lo_down=3,
+                     radix_hour_hi=2, radix_hour_lo =F, count_direction=0
    ┌ 1   num_up 变低（1 拍脉冲），edit_hour 仍为 23
    ├ 2   [状态机] if((~num_up)‖(~num_down)) → hour_pulse<=1
    │     [方向锁存块] else if(~num_up) → count_direction<=0

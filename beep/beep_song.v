@@ -4,7 +4,7 @@
 //
 // 乐谱数据：qifengle.mif — 《起风了》 your_new_home.mif-神奇数字马戏团主题曲-认清现实的小曲儿 乐谱，初始化到 my_ram IP 核
 //
-// RAM 数据编码（每12位，地址空间 256 字节）：
+// RAM 数据编码（数据位宽12位，地址位宽8位，即深度 256 字）：
 //   bit[11:8] — 八度（3=Oct3, 4=Oct4, 5=Oct5, 0=休止, F=结束标记）
 //   bit[7:4]  — 音名（0=休止, 1=DO, 2=RE, 3=ME, 4=FA, 5=SO, 6=LA, 7=XI, 8=DO# RE♭, 9=RE# ME♭, A=FA# SO♭, B=SO# LA♭, C=LA# XI♭, F=结束标记）
 //   bit[3:0]  — 时值（1=十六分, 2=八分, 3=附点八分, 4=四分,
@@ -102,7 +102,7 @@ parameter   BPM = 7'd90;    // BPM 是以4分音符为1拍。起风了 qifengle.
 parameter   PAI = 5'd16;    // 16分音符为1拍，所以下面的 BPM 要乘 PAI/3'd4 = 4
 parameter   CNT_T1P_MAX = CLK * 6'd60 / (BPM * PAI/3'd4 ); // 1拍的计数
 
-wire    [$clog2(CNT_T1P_MAX*16)-1:0]  cnt_dur_max;   // 最多拍数的时长的计数上限，十六分音符为1拍，设最长2份音符是8拍
+wire    [$clog2(CNT_T1P_MAX*16)-1:0]  cnt_dur_max;   // 最多拍数的时长的计数上限，十六分音符为1拍，设最长为一分音符(16拍)
 reg     [$clog2(CNT_T1P_MAX*16)-1:0]  cnt_dur;       // 该音符的时长，即n拍的时长;
 
 // 十六分音符1拍
@@ -246,7 +246,7 @@ begin
         beep <= 1'b1;
     else if(freq_cnt>=duty_data && freq_cnt<=freq_data && beep_en)
         beep <= 1'b0;   // 在计到duty_data之前，beep为高电平
-    else if(freq_cnt==0)
+    else if(freq_cnt==0 || ~beep_en)
         beep <= 1'b0;
 end
 

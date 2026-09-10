@@ -31,6 +31,8 @@
 
 **最小复现路径**：在 EDA 工具里按下列参数重建这两个 IP，并把模块命名为 `my_pll_divider` / `my_ram`、端口名保持一致，即可**不改任何 RTL 代码**直接编译。若想用其它命名/端口，则需同步修改 `clock_mode.v`（PLL 例化处）与 `beep_song.v`（RAM 例化处）。
 
+**提及的配置保持默认即可**
+
 ### ① PLL —— my_pll_divider（50MHz → 1MHz）
 
 | 配置项 | 值 | 备注 |
@@ -185,3 +187,4 @@ flowchart TB
 - alarm_ring_en 维持1秒高电平后自动清除，输出到 clock_mode 里，触发 counter_beep 自增，计数未达到90前， beep_en 持续拉高，作为 beep_song 模块的输入
 - 闹钟鸣响时，状态机自动从 MODE_CLOCK 切换到 MODE_BEEP，数码管显示当前鸣响闹钟的时间（以0.5Hz慢闪烁，1秒亮/1秒灭）
 - 闹钟鸣响显示的数据流：alarm.v 在时间匹配时用 beep_idx 记录触发闹钟编号，clock_mode 拉高 alarm_beep_disp_en 后，alarm.v 将对应闹钟时间以闪烁形式输出到 disp_* 端口，供 seg_dynamic 扫描显示
+- btn_duration 负责管理按键长短按判定，按下时长小于 500ms 判定位短按，时长长于 3s 判定为长按，大于 500ms 小于 3s 判定为无效。由于对按键的处理是 btn_debounce 与 btn_duration 串联，所以实际长短按判定边界都应加上 20ms 消抖时间。

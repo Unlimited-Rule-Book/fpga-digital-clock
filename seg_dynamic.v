@@ -91,35 +91,30 @@ end
 //所以段选信号改为组合逻辑
 always@(*)
 begin
-    if(~rst_n)
-        seg =  8'b0;                               //复位：全显示
-    else
-        begin
-        case(data_disp)
-        4'd0 :  seg =   {point_disp,7'b100_0000};   //显示数字0，字母O
-        4'd1 :  seg =   {point_disp,7'b111_1001};   //显示数字1
-        4'd2 :  seg =   {point_disp,7'b010_0100};   //显示数字2
-        4'd3 :  seg =   {point_disp,7'b011_0000};   //显示数字3
-        4'd4 :  seg =   {point_disp,7'b001_1001};   //显示数字4
-        4'd5 :  seg =   {point_disp,7'b001_0010};   //显示数字5
-        4'd6 :  seg =   {point_disp,7'b000_0010};   //显示数字6
-        4'd7 :  seg =   {point_disp,7'b111_1000};   //显示数字7
-        4'd8 :  seg =   {point_disp,7'b000_0000};   //显示数字8
-        4'd9 :  seg =   {point_disp,7'b001_0000};   //显示数字9
-        4'd10:  seg =   {point_disp,7'b100_0111};   //显示字母L
-        4'd11:  seg =   {point_disp,7'b000_1000};   //显示字母A
-        4'd12:  seg =   {point_disp,7'b010_0001};   //显示字母d
-        4'd13:  seg =   {point_disp,7'b000_0110};   //显示字母E
-        4'd14:  seg =   {point_disp,7'b111_1111};   //全灭
-        4'd15:  seg =   {point_disp,7'b011_1111};   //显示负号  // 依照现在 alarm 中小时个位加计数进制的逻辑，“负号”的编码必须是F，编码必须是4位，使得加计数能够溢出清零！
-
-        // 请看上方对data_disp复制的case语句，这种逻辑下，disp最大只能是4位宽，无法被赋予15以上的值！！
-        // 所以只能根据现有的需求，将需要的编码，不需要的只能舍弃
-        // data_disp也没必要定义成5位宽以增加编码数量了
-        
-        default:seg =   {8{1'b1}};                       //异常：全不显示
-        endcase
-        end
+    case(data_disp)
+    4'd0 :  seg =   {point_disp,7'b100_0000};   //显示数字0，字母O
+    4'd1 :  seg =   {point_disp,7'b111_1001};   //显示数字1
+    4'd2 :  seg =   {point_disp,7'b010_0100};   //显示数字2
+    4'd3 :  seg =   {point_disp,7'b011_0000};   //显示数字3
+    4'd4 :  seg =   {point_disp,7'b001_1001};   //显示数字4
+    4'd5 :  seg =   {point_disp,7'b001_0010};   //显示数字5
+    4'd6 :  seg =   {point_disp,7'b000_0010};   //显示数字6
+    4'd7 :  seg =   {point_disp,7'b111_1000};   //显示数字7
+    4'd8 :  seg =   {point_disp,7'b000_0000};   //显示数字8
+    4'd9 :  seg =   {point_disp,7'b001_0000};   //显示数字9
+    4'd10:  seg =   {point_disp,7'b100_0111};   //显示字母L
+    4'd11:  seg =   {point_disp,7'b000_1000};   //显示字母A
+    4'd12:  seg =   {point_disp,7'b010_0001};   //显示字母d
+    4'd13:  seg =   {point_disp,7'b000_0110};   //显示字母E
+    4'd14:  seg =   {point_disp,7'b111_1111};   //全灭
+    4'd15:  seg =   {point_disp,7'b011_1111};   //显示负号  // 依照现在 alarm 中小时个位加计数进制的逻辑，“负号”的编码必须是F，编码必须是4位，使得加计数能够溢出清零！
+    
+    // 请看上方对data_disp复制的case语句，这种逻辑下，disp最大只能是4位宽，无法被赋予15以上的值！！
+    // 所以只能根据现有的需求，将需要的编码，不需要的只能舍弃
+    // data_disp也没必要定义成5位宽以增加编码数量了
+    
+    default:seg =   {8{1'b1}};                       //异常：全不显示
+    endcase
 end
 
 endmodule

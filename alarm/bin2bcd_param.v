@@ -62,7 +62,7 @@ module bin2bcd_param #(
             shift_reg = shift_reg << 1;
         end
 
-        // 移位结束后，高8位即为最终的BCD结果
+        // 移位结束后，高 BCD_WIDTH 位即为最终的BCD结果
         bcd = shift_reg[SHIFT_WIDTH-1 -: BCD_WIDTH];
     end
 

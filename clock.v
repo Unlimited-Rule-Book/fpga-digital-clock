@@ -64,22 +64,18 @@ always@(posedge sys_clk)
 begin
     if(!rst_n)
         radix_hour <= 4'b1001;
-    else if(~load)      // 置数时，按照置数值判断进制
-        begin
+    else if(~load || ~load_d) begin     // 置数拍 load 与装载拍 load_d: 进制权交给置数值
         if(data_hour[7:4]==4'b0010)
             radix_hour <= 4'b0011;
         else if(data_hour[7:4]==4'b0001 || data_hour[7:4]==4'b0000)
             radix_hour <= 4'b1001;
-        end
-    else if(sec_pulse)  // 非置数时，每秒依照 counter 的输出判断一次进制
-        begin
+    end
+    else begin  // 非置数时，依照 counter 的输出判断一次进制
         if(out_hour[7:4]==4'b0010)
             radix_hour <= 4'b0011;
         else if(out_hour[7:4]==4'b0001 || out_hour[7:4]==4'b0000)
             radix_hour <= 4'b1001;
-        end
-    else
-        radix_hour <= radix_hour;
+    end
 end
 
 wire    [5:0]   RCO;

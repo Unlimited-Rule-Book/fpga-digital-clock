@@ -35,7 +35,7 @@ input   wire    num_up,
 input   wire    num_down,
 input   wire    [7:0]   before_second,  // 将 clock 当前的时间输入到 load_num 中
 input   wire    [7:0]   before_minute,  // 切换到 load_num 后，显示的时间为按下 load 键时的时间，也就是说用户是用当前时刻的时间开始置数
-input   wire    [7:0]   before_hour,    // 在时间置数中为当前时间，在闹钟置数中为上次设定的闹钟值
+input   wire    [7:0]   before_hour,
 // input   wire    [5:0]   point_out,   // 小数点输出被固定，故不需要输入值
 
 
@@ -260,7 +260,7 @@ end
 // 延迟一拍置数，用于 counter
 reg load_before_d = 1'b0;
 always@(posedge sys_clk) load_before_d <= load_before;
-// 踩坑记录
+// 2026-07之前记录：踩坑记录
 // load_num被置数时进制显示bug
 // 什么叫“load_num被置数”？即从clock切换到load_num时，load_before发出低电平脉冲，使load_num最初显示的数字是当前时刻的时间，也就是说load_num的counter被colck置数了
 /* 这一bug的现象是：
@@ -282,8 +282,9 @@ always@(posedge sys_clk) load_before_d <= load_before;
    
    这也是与进制动态显示的bug在置数模块自身的具体体现，在clock里已经有所体现了，看来进制动态显示真的挺麻烦的。
 */
-// 解决方案
-/* 其实这两个按方案都没抓到本质，包括我在 clock 模块中遇到的问题（当 clock 的小时为20-23，置数界面的小时设定为 4-9/14-19，确认置数后，clock显示的小时个位会被钳位到3），
+// 2026-09之后记录：解决方案
+/* 其实我当初想出这两个方案时都没抓到本质（方案1碰巧对了一半，但是没想到 load_before 也要延迟），
+   包括我在 clock 模块中遇到的问题（当 clock 的小时为20-23，置数界面的小时设定为 4-9/14-19，确认置数后，clock显示的小时个位会被钳位到3），
    以及 alarm 进制问题，都是一样的：进制是"值"的属性，不是"计数器"的属性，以下是解释：
    时钟走时、置数上下调整时间、闹钟上下调整时间，这些正常计数时，进制天然跟随当前值，所以我把 radix_hour 很自然地建模成"跟随 counter 输出的寄存器"
    但是这一套在“计数”完全成立的逻辑，放到“置数时刻”，此时进制还是由 counter 输出决定，而非装入 counter 的置数值，就会出现问题。
@@ -327,7 +328,7 @@ begin
     if(!rst_n)
         radix_hour_down <= 4'b1001;
     else if(~num_down && (load_hour==8'b0000_0000 || load_hour[7:4]==4'b0010) && load_hour!=8'b0010_0000)    
-        radix_hour_down <= 4'b0011;                                                     //十位为2时，除了20，其余个位均为3进制
+        radix_hour_down <= 4'b0011;             // 十位为2时，除了20，其余个位均为3进制; 个位十位为00时，个位也为三进制
     else if(~num_down && (load_hour[7:4]==4'b0000 || load_hour[7:4]==4'b0001 || load_hour==8'b0010_0000) && load_hour!=8'b0000_0000)
         radix_hour_down <= 4'b1001;
 end
@@ -383,10 +384,8 @@ counter sec0(sys_clk,sec_pulse, rst_n,load_before_d,before_second[3:0],4'b1001, 
         min0(sys_clk,min_pulse, rst_n,load_before_d,before_minute[3:0],4'b1001,   1'b1  ,1'b1,count_direction,load_minute[3:0],RCO[2],load_point[2]),
         min1(sys_clk,min_pulse, rst_n,load_before_d,before_minute[7:4],4'b0101,   RCO[2],1'b0,count_direction,load_minute[7:4],RCO[3],load_point[3]),
 
-        hor0(sys_clk,hour_pulse_d,rst_n,load_before_d,before_hour[3:0],  radix_hour,1'b1  ,1'b1,count_direction,load_hour[3:0],  RCO[4],load_point[4]),
-        hor1(sys_clk,hour_pulse,  rst_n,load_before_d,before_hour[7:4],  4'b0010,   RCO[4],1'b0,count_direction,load_hour[7:4],  RCO[5],load_point[5]);
-// 注：从右往左数第1个数字代表着counter的point_in输入口，此端口其实不需要输入，但是未用的输入端口则必须提供一个确定的值
-// 而最右侧的输出端口 point_out 也不需要，就暂时悬空
+        hor0(sys_clk,hour_pulse_d,rst_n,load_before_d,before_hour[3:0],radix_hour,1'b1  ,1'b1,count_direction,load_hour[3:0],  RCO[4],load_point[4]),
+        hor1(sys_clk,hour_pulse,  rst_n,load_before_d,before_hour[7:4],4'b0010,   RCO[4],1'b0,count_direction,load_hour[7:4],  RCO[5],load_point[5]);
 
 
 
@@ -430,10 +429,11 @@ else begin
 end
 end
 
-// 数显控制，模式为LOAD_SHOW时，显示LOAd；模式为LOAD_EDIT时显示read_*；模式为LOAD_IDLE时显示为全显示（seg_dynamic编码，F 4'd15为全显示）
+// 数显控制，模式为 LOAD_SHOW 时，显示 LOAd; 模式为 LOAD_EDIT 时显示 ready_*; 
+//           模式为 LOAD_IDLE 时，显示为负号--（seg_dynamic编码，F 4'd15为负号）
 assign  disp_hour   = (mode_en && current_load==LOAD_SHOW) ? {SHOW_EMPTY, SHOW_L} : 
                       (mode_en && current_load==LOAD_EDIT) ? ready_hour           :
-                      8'hFF;   // 增加完全关闭时的保护：mode_en使能且LOAD_IDLE待机时，或者干脆没使能时，都为FF，seg_dynamic编码为全显示
+                      8'hFF;   // 增加完全关闭时的保护：mode_en使能且LOAD_IDLE待机时，或者干脆没使能时，都为FF，seg_dynamic编码为负号
 assign  disp_minute = (mode_en && current_load==LOAD_SHOW) ? {SHOW_O, SHOW_A}     : 
                       (mode_en && current_load==LOAD_EDIT) ? ready_minute         :
                       8'hFF;

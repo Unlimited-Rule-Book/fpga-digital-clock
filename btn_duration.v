@@ -14,8 +14,6 @@
 //   按下时间 0ms~500ms，抬起后：short_press触发（低脉冲持续20ms后自动拉高）
 //   按下时间 500ms~3000ms，抬起后：无效，short_press/long_press均不触发
 //   按下时间 >= 3000ms：long_press立即触发，同时 press_cnt 清零（防止重复触发）
-//   注：消抖时钟 press_cnt 与 shortdur_press_cnt 是两个计数器， 
-//       press_cnt 各个计数节点均为减去消抖时长，所以后面的时间得叠加上消抖时间
 //
 // 与 btn_debounce 的联系与区别：
 //   1. 本身不含按键消抖，按键输入信号已经过消抖

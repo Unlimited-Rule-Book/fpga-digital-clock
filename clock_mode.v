@@ -59,7 +59,7 @@
 //        c) MODE_BEEP 状态下：
 //           · clock_mode 拉高 alarm_beep_disp_en，并将 disp_* 的来源切换为 alarm.v 的输出
 //           · beep_song.v 被 beep_en 使能，开始循环播放《起风了》或《your new home》乐曲
-//           · alarm.v 收到 alarm_beep_disp_en → 以 1Hz 慢闪烁（1秒亮/1秒灭）
+//           · alarm.v 收到 alarm_beep_disp_en → 以 0.5Hz 慢闪烁（1秒亮/1秒灭）
 //             输出鸣响闹钟的时间到 disp_* 端口，供 seg_dynamic 扫描显示
 //        d) 停止条件（二选一，任意满足即停止）：
 //           ① counter_beep 计到 CNT_BEEP(90) → counter_beep 归零 → beep_en=0
@@ -151,9 +151,9 @@ sys_divider clock_mode_sys_divider
     .pre_clk  (sys_clk_1mhz ),
     .rst_n    (rst_n        ),
     
-    .pulse_1ms(pulse_1ms    ),
-    .pulse_1s (pulse_1s     ),   // → clock-counter的使能时钟
-    .sec_clk  (sec_clk      )    // → clock里小数点和load_num置数和显示load几个字时用
+    .pulse_1ms(pulse_1ms    ),  // btn_debounce 按键计时, seg_dynamic 数码管扫描时钟用
+    .pulse_1s (pulse_1s     ),  // → clock-counter 的使能时钟
+    .sec_clk  (sec_clk      )   // → seg_dynamic 里小数点, load_num 置数和显示 load 几个字, alarm 设置闹钟时用
 
 );
 
@@ -204,7 +204,7 @@ end
 // 短按检测（小于500ms）+长按3秒检测  
 wire    load_short;
 wire    load_long;
-// 按键消抖+长短按模块接口已改为pulse_1ms计数，LONG_PRESS_MS单位为ms
+// SHORT_END_MS LONG_PRESS_MS 单位为ms
 btn_duration #(.SHORT_END_MS(500), .LONG_PRESS_MS(3000))
 clock_mode_btn_duration_load    
 (

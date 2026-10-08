@@ -19,7 +19,7 @@
 //     和 duty_data（占空比翻转点，固定 50%）
 //   3. freq_cnt 从 0 计数到 freq_data 再归零，产生对应音高的 PWM 波
 //   4. cnt_dur 计数到 cnt_dur_max（由时值决定）后 rd_addr 指向下一个音符
-//   5. 遇到结束标记（12'hFFF）时 rd_addr 归零，从头开始循环播放
+//   5. 遇到结束标记时 rd_addr 归零，从头开始循环播放
 //   6. beep_en 低电平期间指针和计数器全部归零，下次使能后从头播放
 //
 // 节拍参数：
@@ -118,29 +118,29 @@ assign  cnt_dur_max = rd_data[3:0]==4'hF ? CNT_T1P_MAX*5'd16 : CNT_T1P_MAX*rd_da
 // 该音符的时长
 always@(posedge sys_clk)
 begin
-    if(~rst_n)
+    if(!rst_n)
         cnt_dur <= 0;
     else if((cnt_dur==cnt_dur_max || rd_data[11:4]==8'hFF) && beep_en)
         cnt_dur <= 0;
     else if(beep_en)
         cnt_dur <= cnt_dur + 1'b1;
         // 如果不加下面的这条语句，那么效果是 beep_en 中途不使能，然后再使能时，会接着上次播放
-    else if(!beep_en)
+    else if(~beep_en)
         cnt_dur <= 0;
 end
 
 
 // 指针移动
 always@(posedge sys_clk)
-begin   // 暂定为 beep_en 使能不断就一直播放
-    if(~rst_n)
+begin   // beep_en 使能不断就一直播放
+    if(!rst_n)
         rd_addr <= 0;
     else if(rd_data[11:4]==8'hFF && beep_en)    // 遇到结束标记，将指针归零
         rd_addr <= 0;
     else if(cnt_dur==cnt_dur_max && beep_en)
         rd_addr <= rd_addr+1'b1;
         // 如果不加下面的这条语句，那么效果是 beep_en 中途不使能，然后再使能时，会接着上次播放
-    else if(!beep_en)
+    else if(~beep_en)
         rd_addr <= 0;
 end
 // 内容读取
@@ -169,7 +169,7 @@ reg [31:0]  duty_data;  // 占空比50%的占空比计数值，在计到这个�
 
 always@(posedge sys_clk)
 begin
-    if(~rst_n)begin
+    if(!rst_n)begin
         freq_data <= DO4;
         duty_data <= DO4_50;
     end
@@ -223,24 +223,24 @@ begin
 end
 // 决定PWM频率的计数器与PWM的值
 
-reg [32:0]  freq_cnt;
+reg [31:0]  freq_cnt;
 
 parameter   TIME_GAP = CNT_T1P_MAX / 5'd16; // 每一个音符之间留一些空
 always@(posedge sys_clk)
 begin
-    if(~rst_n)
+    if(!rst_n)
         freq_cnt <= 0;
     else if(freq_cnt==freq_data || cnt_dur>=(cnt_dur_max - TIME_GAP)) // 如果freq_cnt未计到最大值，但是该音符发声时间已到，也进行清零
         freq_cnt <= 0;
     else if(beep_en)
         freq_cnt <= freq_cnt + 1'b1;
         // 如果不加下面的这条语句，那么效果是 beep_en 中途不使能，然后再使能时，会接着上次播放
-    else if(!beep_en)
+    else if(~beep_en)
         freq_cnt <= 0;
 end
 always@(posedge sys_clk)
 begin
-    if(~rst_n)
+    if(!rst_n)
         beep <= 1'b0;
     else if(freq_cnt > 0 && freq_cnt < duty_data && beep_en)
         beep <= 1'b1;

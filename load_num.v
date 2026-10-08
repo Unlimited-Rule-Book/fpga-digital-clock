@@ -99,16 +99,23 @@ begin
 
         LOAD_SHOW:   // 不能直接对ready_hour等赋值，因为置数时也会对它们赋值，这样的话就会有两个地方驱动ready_hour，不合法，
         begin        // 所以需要将SHOW与EDIT时的信号分开，可能需要再对seg_dynamic实例化
-            if (sec_clk_prev==1'b0 & sec_clk==1'b1) begin
+            if (sec_clk_prev==1'b0 && sec_clk==1'b1) begin
                 up_display <= 1'b1;         //遇到上升沿才给使能
                 current_load <= LOAD_SHOW;  //维持原态
             end
-            else if(sec_clk_prev==1'b1 & sec_clk==1'b0) begin
+            else if(sec_clk_prev==1'b1 && sec_clk==1'b0) begin
                 down_display <= 1'b1;   //遇到下降沿才给使能
                 current_load <= LOAD_SHOW;  //维持原态
             end
-            if (up_display==1'b1&down_display==1'b1) begin
-            //两使能齐全才切换模式，保证LOAd至少显示0.5秒，最多不到1秒 - [0.5,1)
+            
+            if (~mode_en) begin // 如果还在显示 LOAd 时用户就短按 load 切换模式，那么就执行此退出处理
+                current_load <= LOAD_IDLE;
+                up_display   <= 1'b0;
+                down_display <= 1'b0;
+                set_en       <= 1'b0;
+            end
+            else if (up_display==1'b1 && down_display==1'b1) begin
+            //两使能齐全才切换模式，保证LOAd至少显示0.5秒，最多不到1秒 - (0.5,1]
                 up_display <= 1'b0;
                 down_display <= 1'b0;
                 current_load <= LOAD_EDIT;
@@ -126,6 +133,7 @@ begin
                 current_load <= LOAD_IDLE;
             end
         end        
+        
         default:
         begin
             current_load <= LOAD_IDLE;
@@ -133,7 +141,6 @@ begin
             down_display <= 1'b0;    
             set_en <= 1'b0;            
         end
-   
         endcase
     end
 end
@@ -160,9 +167,6 @@ reg [1:0]   current_set;
 reg sec_pulse;
 reg min_pulse;
 reg hour_pulse;
-//每次 set_en 使能（上跳沿）进入 LOAD_EDIT 模式，对 current_set 重置为 SET_HOUR, 使本状态机选择的时钟位
-reg set_en_prev = 1'b0;
-always@(posedge sys_clk) set_en_prev <= set_en;
 
 //状态机、时分秒计数脉冲产生
 always@(posedge sys_clk)
@@ -190,8 +194,8 @@ begin
                     hour_pulse <= 1'b0;
                 
                 // 状态切换
-                if(set_en_prev==1'b0 && set_en==1'b1) current_set <=  SET_HOUR; // 每次 set_en 使能进入 LOAD_EDIT 模式，就默认选择 SET_HOUR
-                else if(~choose) current_set <= SET_MINUTE;    // choose低有效
+                if(~choose) current_set <= SET_MINUTE;    // choose低有效
+                else        current_set <= SET_HOUR;
             end
             SET_MINUTE:
             begin
@@ -205,8 +209,8 @@ begin
                     min_pulse <= 1'b0;
 
                 // 状态切换
-                if(set_en_prev==1'b0 && set_en==1'b1) current_set <=  SET_HOUR; // 每次 set_en 使能进入 LOAD_EDIT 模式，就默认选择 SET_HOUR                    
-                else if(~choose) current_set <= SET_SECOND;
+                if(~choose) current_set <= SET_SECOND;
+                else        current_set <= SET_MINUTE;
             end        
             SET_SECOND:
             begin
@@ -220,8 +224,8 @@ begin
                         sec_pulse <= 1'b0;
         
                 // 状态切换
-                if(set_en_prev==1'b0 && set_en==1'b1) current_set <=  SET_HOUR; // 每次 set_en 使能进入 LOAD_EDIT 模式，就默认选择 SET_HOUR
-                else if(~choose) current_set <= SET_HOUR;
+                if(~choose) current_set <= SET_HOUR;
+                else        current_set <= SET_SECOND;
             end        
             default: 
             begin
@@ -231,8 +235,14 @@ begin
                 twinkle <= TWINKLE_HOUR;
                 current_set <= SET_HOUR;
             end
-        
             endcase
+        end
+        else begin
+            sec_pulse <= 1'b0;
+            min_pulse <= 1'b0;      
+            hour_pulse <= 1'b0;    
+            twinkle <= TWINKLE_HOUR;
+            current_set <= SET_HOUR;// set_en 不使能时就切换到 SET_HOUR, 当 set_en 使能进入 LOAD_EDIT 模式，就会默认选择 SET_HOUR
         end
     end
 end
@@ -278,7 +288,8 @@ always@(posedge sys_clk) load_before_d <= load_before;
 */   
 /* 方案1缺点是逻辑较复杂，占用LUT资源略多
    方案2缺点是每秒load_*一直在更新，耗电量略多
-   综合权衡后，决定使用代码更简洁的方案2，但是如果将来为了节省那一点点电，可以采取方案1，于是将方案1的代码注释掉、保留！
+   综合权衡后，决定使用代码更简洁的方案2（该方案后来已被下方 2026-09 的新方案替代），
+                但是如果将来为了节省那一点点电，可以采取方案1，于是将方案1的代码注释掉、保留！
    
    这也是与进制动态显示的bug在置数模块自身的具体体现，在clock里已经有所体现了，看来进制动态显示真的挺麻烦的。
 */
@@ -341,7 +352,7 @@ always@(posedge sys_clk)    num_up_d <= num_up;
 always@(posedge sys_clk)    num_down_d <= num_down;
 always@(posedge sys_clk)
 begin
-    if(~rst_n)
+    if(!rst_n)
         radix_hour <= radix_hour_up;
     else if(~load_before)   // 置数瞬间，进制权交给 clock 的值
         begin

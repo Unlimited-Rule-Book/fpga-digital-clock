@@ -17,7 +17,7 @@
 // ├────────────────────────────────────────────────────────────────────────┤
 // │  置数模式     │  短按 load             │  进入闹钟模式的浏览闹钟界面   │
 // │  置数模式     │  长按 load             │  确认置数，返回时钟模式       │
-// │  置数模式     │  15s 无操作            │  超时，返回时钟模式(置数取消) │
+// │  置数模式     │  14s左右 无操作        │  超时，返回时钟模式(置数取消) │
 // │  置数模式     │  短按 choose           │  （在 load_num 中）切换设置位 │
 // │  置数模式     │  短按 num_up           │  （在 load_num 中）当前位+1   │
 // │  置数模式     │  短按 num_down         │  （在 load_num 中）当前位-1   │
@@ -29,7 +29,7 @@
 // │  闹钟模式     │  编辑闹钟界面短按 load │  取消设置闹钟，返回浏览闹钟   │
 // ├────────────────────────────────────────────────────────────────────────┤
 // │  鸣响显示模式 │  闹钟/乐曲停止（自动） │  返回时钟模式                 │
-// │  鸣响显示模式 │  短按 choose/num_up/   │  手动停止闹钟，返回时钟模式   │
+// │  鸣响显示模式 │  短按 choose/num_up/   │  闹钟停止后，返回时钟模式     │
 // │               │  num_down              │                               │
 // └────────────────────────────────────────────────────────────────────────┘
 // 注意：由于 LOAd 需显示0.5~1秒，故“15秒无操作返回”实际上在置数的数字编辑页面只能显示约14秒
@@ -39,8 +39,7 @@
 // 注意事项：
 //   1. clock 子模块始终在后台运行，
 //      置数和闹钟模式不会暂停走时，退出后显示的是实际流逝后的时间。
-//   2. 输出信号选择： 状态机控制 disp_second/disp_minute/disp_hour/disp_point 的来源，
-//      两个子系统的显示输出通过 OR 门合并，同一时刻只有一路处于使能状态。
+//   2. 输出信号选择： 状态机控制 disp_second/disp_minute/disp_hour/disp_point 的来源。
 //   3. 三种模式在顶层共用一套seg_dynamic、hc595_ctrl模块，用状态机对模块输出的数字进行控制
 //   4. 闹钟鸣响与显示控制
 //      架构概览（握手信号流）：
@@ -62,7 +61,7 @@
 //           · alarm.v 收到 alarm_beep_disp_en → 以 0.5Hz 慢闪烁（1秒亮/1秒灭）
 //             输出鸣响闹钟的时间到 disp_* 端口，供 seg_dynamic 扫描显示
 //        d) 停止条件（二选一，任意满足即停止）：
-//           ① counter_beep 计到 CNT_BEEP(90) → counter_beep 归零 → beep_en=0
+//           ① counter_beep 计到 CNT_BEEP(59) → counter_beep 归零 → beep_en=0
 //           ② 任意按键(choose/num_up/num_down)按下（button_now ≠ button_prev）
 //              → counter_beep 归零 → beep_en=0
 //           beep_en=0 后 cs 回到 MODE_CLOCK，alarm_beep_disp_en 拉低
@@ -187,17 +186,17 @@ always@(posedge sys_clk)    num_up_prev <= num_up_db;
 always@(posedge sys_clk)    num_down_prev  <= num_down_db;
 always@(posedge sys_clk) begin
     if(rst_n==1'b0)                                 choose_pulse <= 1'b1;
-    else if(choose_prev==1'b1 & choose_db==1'b0)    choose_pulse <= 1'b0;
+    else if(choose_prev==1'b1 && choose_db==1'b0)   choose_pulse <= 1'b0;
     else                                            choose_pulse <= 1'b1;
 end
 always@(posedge sys_clk) begin
     if(rst_n==1'b0)                                 num_up_pulse <= 1'b1;
-    else if(num_up_prev==1'b1 & num_up_db==1'b0)    num_up_pulse <= 1'b0;
+    else if(num_up_prev==1'b1 && num_up_db==1'b0)   num_up_pulse <= 1'b0;
     else                                            num_up_pulse <= 1'b1;
 end
 always@(posedge sys_clk) begin
     if(rst_n==1'b0)                                 num_down_pulse <= 1'b1;
-    else if(num_down_prev==1'b1 & num_down_db==1'b0)num_down_pulse <= 1'b0;
+    else if(num_down_prev==1'b1 && num_down_db==1'b0)num_down_pulse <= 1'b0;
     else                                            num_down_pulse <= 1'b1;
 end
 
@@ -227,12 +226,12 @@ always@(posedge sys_clk)    load_short_prev <= load_short;
 always@(posedge sys_clk)    load_long_prev  <= load_long;
 always@(posedge sys_clk) begin
     if(rst_n==1'b0)                                     load_short_pulse <= 1'b1;
-    else if(load_short_prev==1'b1 & load_short==1'b0)   load_short_pulse <= 1'b0;
+    else if(load_short_prev==1'b1 && load_short==1'b0)  load_short_pulse <= 1'b0;
     else                                                load_short_pulse <= 1'b1;
 end
 always@(posedge sys_clk) begin
     if(rst_n==1'b0)                                     load_long_pulse <= 1'b1;
-    else if(load_long_prev==1'b1 & load_long==1'b0)     load_long_pulse <= 1'b0;
+    else if(load_long_prev==1'b1 && load_long==1'b0)    load_long_pulse <= 1'b0;
     else                                                load_long_pulse <= 1'b1;
 end
 // alarm 专供的 choose
@@ -259,12 +258,12 @@ always@(posedge sys_clk)    choose_short_prev <= choose_short;
 always@(posedge sys_clk)    choose_long_prev  <= choose_long;
 always@(posedge sys_clk) begin
     if(rst_n==1'b0)                                         choose_short_pulse <= 1'b1;
-    else if(choose_short_prev==1'b1 & choose_short==1'b0)   choose_short_pulse <= 1'b0;
+    else if(choose_short_prev==1'b1 && choose_short==1'b0)  choose_short_pulse <= 1'b0;
     else                                                    choose_short_pulse <= 1'b1;
 end
 always@(posedge sys_clk) begin
     if(rst_n==1'b0)                                         choose_long_pulse <= 1'b1;
-    else if(choose_long_prev==1'b1 & choose_long==1'b0)     choose_long_pulse <= 1'b0;
+    else if(choose_long_prev==1'b1 && choose_long==1'b0)    choose_long_pulse <= 1'b0;
     else                                                    choose_long_pulse <= 1'b1;
 end
 
@@ -361,9 +360,10 @@ localparam COUNTER_15S_COUNT = COUNTER_15S_TIME;      // 15秒计数值
 // 我更倾向于 plan A, 所以就不做更改了
 reg [2:0]   button_prev=3'b111;      //记录输入信号之前的值（num_up、num_down、choose），按系统时钟更新
 wire[2:0]   button_now;
-assign      button_now={choose_db,num_up_db,num_down_db};//现在的值，实时更新
+assign      button_now={choose_db,num_up_db,num_down_db};   //现在的值，实时更新
 always@(posedge sys_clk) button_prev <= {choose_db,num_up_db,num_down_db};
-//检测按键变化的功能在后面也有作用：用于将闹钟关掉
+//检测按键变化的功能在后面也有作用：用于将闹钟关掉。如果后期想开发“按下load真正停止闹钟，按下其余按键触发再响”的功能
+//那么此处就不能把 load_db 加入 button_now 和 button_prev
 
 // alarm 在 ALARM_VIEW 状态下，短按 load ，才切换回时钟模式
 wire    alarm_view_en;
@@ -376,7 +376,7 @@ reg     alarm_beep_disp_en;
 
 // 状态更新
 always@(posedge sys_clk) begin
-    if(~rst_n)
+    if(!rst_n)
         cs <= MODE_CLOCK;
     else
         cs <= ns;
@@ -400,8 +400,8 @@ begin
             ns = MODE_ALARM;
         else if(load_short_pulse==1'b1&&load_long_pulse==1'b0) //load长按确认置数，之后切换为时钟模式
             ns = MODE_CLOCK;
-        // 15秒无按键输入即返回clock，计时逻辑在第三段状态机里
-        else if(button_now == button_prev && counter_15s >= COUNTER_15S_COUNT)
+        // 15秒无按键输入 & load键没有被按下，即返回clock，计时逻辑在第三段状态机里
+        else if((button_now == button_prev && load_db) && counter_15s >= COUNTER_15S_COUNT)
             ns = MODE_CLOCK;
         else
             ns = MODE_LOAD;
@@ -518,12 +518,12 @@ begin
                 counter_15s <= 0;
 
             // 计时15秒无按键输入（检测load之外的按键）即返回clock
-            else if(button_now != button_prev)       
+            else if(button_now != button_prev || ~load_db)       
                 counter_15s <= 0;           
-            else if(button_now == button_prev && counter_15s < COUNTER_15S_COUNT)begin
+            else if((button_now == button_prev && load_db) && counter_15s < COUNTER_15S_COUNT)begin
                 if (pulse_1s) counter_15s <= counter_15s + 1'b1;
             end // 这里的begin-end必须加，否则下一行的else就会匹配if(pulse_1s)而不会匹配正确的if
-            else if(button_now == button_prev && counter_15s >= COUNTER_15S_COUNT)
+            else if((button_now == button_prev && load_db) && counter_15s >= COUNTER_15S_COUNT)
                 counter_15s <= 0;
             else
                 counter_15s <= counter_15s;
@@ -647,7 +647,7 @@ clock   clock_mode_clock
 
 //置数模式
 /* 注意：不可以将 load_confirm 信号加入状态机进行控制！ load_long_pulse 必须直接连接 load_confirm 
-因为在 load_num 末尾，data_* 在 load_confirm 即 load_long_pulse 下降沿更新（被 load_* 赋值）
+因为在 load_num 末尾, data_* 在 load_confirm 即 load_long_pulse 的低电平脉冲下更新（被 load_* 赋值）
 load_clock 经状态机，也是在 load_long_pulse 下降沿更新，故二者同拍更新
 下一拍， clock 就能因 load_clock 的低电平而读取已更新的 data_* ，读取正确。
 一旦输入 load_confirm 的信号进入状态机， data_* 更新的时间就比 load_clock 晚一拍，
@@ -684,7 +684,8 @@ alarm       clock_mode_alarm
 (
     .mode_en        (mode_alarm_en      ),
     .sys_clk        (sys_clk            ),
-    .sec_clk        (sec_clk            ),      
+    .sec_clk        (sec_clk            ), 
+    .pulse_1s       (pulse_1s           ),
     .rst_n          (rst_n              ),
     .load           (load_alarm         ),         
     .load_confirm   (load_confirm_alarm ), 
@@ -706,22 +707,24 @@ alarm       clock_mode_alarm
 );
 
 // beep_en 使能信号在状态机前声明
-parameter   CNT_BEEP = 7'd90;   // 闹钟响90秒
+parameter   CNT_BEEP = 6'd59;   // 闹钟响59秒
 reg [$clog2(CNT_BEEP)-1:0]   counter_beep;
+reg pulse_1s_d1, pulse_1s_d2;   // alarm 中 alarm_ring_en 在 pulse_1s_d 下进行判断，按照流水线，此 always 块应在两拍延迟下驱动
+always@(posedge sys_clk) begin pulse_1s_d1 <= pulse_1s; pulse_1s_d2 <= pulse_1s_d1; end
 always@(posedge sys_clk)
 begin
     if(!rst_n)
         counter_beep <= 0;
     else if(button_now != button_prev)  // 按任意按键暂停闹钟
         counter_beep <= 0;
-    else if(pulse_1s && alarm_ring_en)
+    else if(pulse_1s_d2 && alarm_ring_en)
         counter_beep <= counter_beep + 1'b1;
-    else if(pulse_1s && (counter_beep >= CNT_BEEP) )    // 这里说一种极端情况：如果上一个闹钟的鸣响时间到了 counter_beep = CNT_BEEP ，
-        counter_beep <= 0;                          // 此时恰好下一个闹钟也到了 alarm_ring_en=1, 按照现在的逻辑，后者的分支优先，
-    else if(pulse_1s && counter_beep > 0)           // 会执行加计数, counter_beep 在下一秒被清零，因此会只多响1秒，后一个闹钟相当于没响。
-        counter_beep <= counter_beep + 1'b1;        // 如果想改成：下一个闹钟来的时候, counter_beep 启动新一轮计数，那么需要：
-end                                         // 1. 将清零分支改成 counter_beep == CNT_BEEP 2. 在清零之前、自增(counter_beep > 0分支)之后
-always@(*)                                  // 添加(pulse_1s && (counter_beep >CNT_BEEP))，内容是 counter_beep <= 1; 
+    else if(pulse_1s_d2 && (counter_beep >= CNT_BEEP) )
+        counter_beep <= 0;
+    else if(pulse_1s_d2 && counter_beep > 0)
+        counter_beep <= counter_beep + 1'b1;
+end
+always@(*)
 begin
     if(counter_beep > 0)
         beep_en = 1'b1;

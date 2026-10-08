@@ -10,7 +10,7 @@
 //      编辑状态下先选中使能状态（可翻转），再选 hour，再选 minute
 //   4. 编辑完成后长按 load （ load_confirm ）将编辑值写入对应闹钟 alarm_mem
 //      短按 load 取消编辑，返回浏览状态
-//   5. 时间匹配：每 1 秒（ sec_clk 下降沿）检测所有使能闹钟是否匹配当前时间，
+//   5. 时间匹配：每 1 秒（ pulse_1s 高电平脉冲）检测所有使能闹钟是否匹配当前时间，
 //      匹配时拉高 alarm_ring_en （维持1秒），由 clock_mode 触发蜂鸣器
 //   6. 鸣响显示：当 clock_mode 拉高 alarm_beep_disp_en 时，
 //      本模块通过 beep_idx 找到正在鸣响的闹钟，
@@ -33,8 +33,9 @@
 //   bin2bcd_param ×1（闹钟编号 → BCD 显示）
 //
 // 注意：
-//   1. alarm_ring_en 在 sec_clk 下降沿检测， set 和 clear 在同一时钟沿完成
-//      （non-blocking 赋值，时序正确），维持 1 个 sec_clk 周期的高电平
+//   1. alarm_ring_en 的拉高(使能) 和 拉低(不使能) 分支在同一时钟沿判断, 拉低 分支读到的是沿前的信号值：
+//      当沿后信号使能, 拉低 分支读到沿前的信号（低电平），故不进行 拉低 ;下一时钟周期, 拉低 分支才读到上一时钟周期的高电平信号，将信号拉低
+//      所以 alarm_ring_en 被拉高后，到下一次 pulse_1s_d 才被拉低，高电平维持 1 秒
 //   2. choose_edit_delay 延时一拍，确保 counter 读到由 view_num 计算得到的
 //      动态进制值，避免加载 FF 后立即被 counter 修正为 23
 //   3. 小时加/减双方向变进制逻辑与 load_num 中一致（24小时制）
@@ -47,6 +48,7 @@ module alarm
 input   wire    mode_en,
 input   wire    sys_clk,
 input   wire    sec_clk,                // 1Hz时钟，用于控制 ALARM_EDIT 状态下，被选中的数位闪烁的逻辑
+input   wire    pulse_1s,               // 1秒脉冲，每秒判断一次闹钟是否到达时间
 input   wire    rst_n,
 input   wire    load,                   // 短按load，用于取消对某个闹钟的设置，在顶层与 load_short_pulse 相连接
 input   wire    load_confirm,           // 长按load，用于确认对某个闹钟的设置，在顶层与 load_long_pulse 相连接
@@ -198,16 +200,13 @@ reg hour_pulse;
 reg min_pulse;
 //定义闹钟状态——闹钟是否使能（开启）
 reg edit_state;
-//每次 set_en 使能（上跳沿），对 current_set 重置为 SET_STATE
-reg set_en_prev = 1'b0;// 对 set_en 采用跳沿检测，每次 set_en 使能进入 ALARM_EDIT 模式，就重置本状态机选择的时钟位（下面有进一步的解释）
-always@(posedge sys_clk) set_en_prev <= set_en;
 
 //状态机-时分秒计数脉冲产生
 always@(posedge sys_clk)
 begin
     if(!rst_n)
     begin
-        edit_state <= alarm_mem[alarm_num][16]; 
+        edit_state <= 1'b0; // 复位时, alarm_mem 中的闹钟是未使能的，所以这里就赋 1'b0
         hour_pulse <= 1'b0;
         min_pulse <= 1'b0;      
         twinkle <= TWINKLE_STATE;
@@ -225,14 +224,8 @@ begin
                     edit_state <= ~edit_state;
                     
                 // 状态切换
-                if(set_en_prev==1'b0 && set_en==1'b1) begin // 每次 set_en 使能进入 ALARM_EDIT, 就默认选择 SET_STATE, 并显示闹钟状态
-                    current_set <=  SET_STATE;
-                    edit_state <= alarm_mem[alarm_num][16];
-                end
-                else if(~choose)    // choose 低有效
-                    current_set <= SET_HOUR;
-                else
-                    current_set <= SET_STATE;
+                if(~choose) current_set <= SET_HOUR;    // choose 低有效
+                else        current_set <= SET_STATE;
             end
             SET_HOUR:
             begin
@@ -245,14 +238,8 @@ begin
                     hour_pulse <= 1'b0;
                     
                 // 状态切换    
-                if(set_en_prev==1'b0 && set_en==1'b1) begin // 每次 set_en 使能进入 ALARM_EDIT, 就默认选择 SET_STATE, 并显示闹钟状态
-                    current_set <=  SET_STATE;
-                    edit_state <= alarm_mem[alarm_num][16];
-                end
-                else if(~choose)
-                    current_set <= SET_MINUTE;
-                else
-                    current_set <= SET_HOUR;
+                if(~choose) current_set <= SET_MINUTE;
+                else        current_set <= SET_HOUR;
             end        
             SET_MINUTE:
             begin
@@ -265,14 +252,8 @@ begin
                     min_pulse <= 1'b0;
         
                 // 状态切换
-                if(set_en_prev==1'b0 && set_en==1'b1) begin // 每次 set_en 使能进入 ALARM_EDIT, 就默认选择 SET_STATE, 并显示闹钟状态
-                    current_set <=  SET_STATE;
-                    edit_state <= alarm_mem[alarm_num][16];
-                end
-                else if(~choose)
-                    current_set <= SET_STATE;
-                else
-                    current_set <= SET_MINUTE;
+                if(~choose) current_set <= SET_STATE;
+                else        current_set <= SET_MINUTE;
             end        
             default: 
             begin
@@ -284,6 +265,13 @@ begin
             end
             endcase
         end
+        else begin
+            edit_state <= alarm_mem[alarm_num][16];// set_en 不使能时就将闹钟状态赋值给 edit_state
+            hour_pulse <= 1'b0;    
+            min_pulse <= 1'b0;
+            twinkle <= TWINKLE_STATE;
+            current_set <= SET_STATE;// set_en 不使能时就切换到 SET_STATE, 每次 set_en 使能进入 ALARM_EDIT, 就默认选择 SET_STATE
+       end
     end
 end
 
@@ -304,7 +292,7 @@ wire [7:0]   edit_minute;   // ALARM_EDIT 模式下赋值给 ready_*
 wire [5:0]   load_point;
 //定义置数值显示中间值
 reg  [7:0]   ready_state;   // 这些“中间值”是 ALARM_EDIT 模式下，数字的显示，经 MUX 直接连接 disp_* (即 disp_state 等)
-reg  [7:0]   ready_hour;    // 受到“闪烁”逻辑的赋值，假如 hour 被选中，则 ready_state 前半秒灭，后半秒显示 edit_hour
+reg  [7:0]   ready_hour;    // 受到“闪烁”逻辑的赋值，假如 hour 被选中，则 ready_hour 前半秒灭，后半秒显示 edit_hour
 reg  [7:0]   ready_minute;
 
 //定义中间变量，设置“时”的个位的进制
@@ -348,7 +336,7 @@ always@(posedge sys_clk)    num_down_d <= num_down;
 // 小时个位进制动态显示，决断块
 always@(posedge sys_clk)
 begin
-    if(~rst_n)
+    if(!rst_n)
         radix_hour_lo <= 4'b1001;
     else if(current_set==SET_HOUR && ~num_up_d)     //  ~num_up_d 不可替换成 ~count_direction, 虽然二者都是 num_up 延迟一拍，但前者为脉冲，
         radix_hour_lo <= radix_hour_lo_up;              // 后者为电平，会导致进入编辑后，按 choose 切换状态到 current_set==SET_HOUR 后
@@ -524,7 +512,9 @@ begin
     end
 end
 // 检测时间是否到了
-reg [$clog2(ALARM_CNT):0] alarm_idx;    // 这里的位宽必须为3，否则index计到4会溢出归零，永远达不到index < ALARM_NUM条件，而终止条件必须设为这样，否则检测不到3号闹钟
+integer alarm_idx;    // 循环变量宜定义为 integer
+reg pulse_1s_d;
+always@(posedge sys_clk)    pulse_1s_d <= pulse_1s; // 延迟一拍，用于接收在 pulse_1s 下驱动的 counter 更新的时间
 always@(posedge sys_clk)
 begin
     if(!rst_n) begin
@@ -532,7 +522,7 @@ begin
         beep_idx <= 0;
     end
     else begin
-        if(~sec_clk && sec_clk_prev) begin  // 每1秒检测一次，对 sec_clk 下跳沿检测
+        if(pulse_1s_d) begin  // 每1秒检测一次，与顶层接收 alarm_ring_en 的模块形成流水线
             for (alarm_idx = 1'b0; alarm_idx < ALARM_CNT; alarm_idx = alarm_idx + 1'b1)begin
                 if (alarm_mem[alarm_idx][16])begin
                     if({alarm_mem[alarm_idx][15:0],8'h00} == {now_hour,now_minute,now_second}) begin
@@ -546,13 +536,11 @@ begin
         end
     end
 end
-// alarm_ring_en 采用下降沿检测的原因
+// alarm_ring_en 采用 pulse_1s_d 使能的原因
 /*
-    因为在 sys_divider 中, pulse_1s 是 sec_flag 上升沿检测，与 sec_clk 的上升沿同拍
-    (pulse_1s 是 counter 的使能, sec_clk 是 alarm_ring_en 的检测时间)
-    所以将 alarm_ring_en 的检测时机设定为为 sec_clk 下降沿匹配：
-    下降沿时，时间已经过了0.5秒，接到 pulse_1s 的 counter 的计数值（经过0.5秒）已经稳定，
-    此时 alarm_ring_en 的判定模块读取到的 now_* 的值就是当前的值。
+    因为在 clock 中, counter 依靠 pulse_1s 使能, 所以延迟一拍后, alarm_ring_en 模块能接收到更新后的时间 now_*。
+    counter 模块、本模块中的 alarm_ring_en 使能模块、顶层 clock_mode 中连接 alarm_ring_en 的 counter_beep 鸣响计时模块
+    共同构成流水线，所以三者的使能分别是 pulse_1s, pulse_1s_d, pulse_1s_d2
 */
 
 
@@ -578,16 +566,13 @@ assign  point_out   = (~mode_en&& alarm_beep_disp_en)        ? beep_point       
 
 
 
-//  ====================  进行置数  ====================
+//  ====================  存入 RAM memory  ====================
+integer alarm_index;  // 用于循环复位
 always@(posedge sys_clk)
 begin
-    if(!rst_n)
-    begin
-        alarm_mem[2'b00] <= {1'b0,SHOW_DEFAULT,SHOW_DEFAULT,SHOW_DEFAULT,SHOW_DEFAULT};
-        alarm_mem[2'b01] <= {1'b0,SHOW_DEFAULT,SHOW_DEFAULT,SHOW_DEFAULT,SHOW_DEFAULT};
-        alarm_mem[2'b10] <= {1'b0,SHOW_DEFAULT,SHOW_DEFAULT,SHOW_DEFAULT,SHOW_DEFAULT};
-        alarm_mem[2'b11] <= {1'b0,SHOW_DEFAULT,SHOW_DEFAULT,SHOW_DEFAULT,SHOW_DEFAULT};
-    end
+    if(!rst_n)  // 由于闹钟数量未定，此处采用循环复位
+        for (alarm_index = 1'b0; alarm_index < ALARM_CNT; alarm_index = alarm_index + 1'b1)
+            alarm_mem[alarm_index] <= {1'b0,SHOW_DEFAULT,SHOW_DEFAULT,SHOW_DEFAULT,SHOW_DEFAULT};
     else if(mode_en && set_en) begin  // 使能信号
         if(!load_confirm)   // 长按load的信号
         begin

@@ -70,7 +70,7 @@ reg [1:0]   cs, ns;
 
 // 状态更新
 always@(posedge sys_clk) begin
-    if(~rst_n)
+    if(!rst_n)
         cs <= IDLE;
     else
         cs <= ns;

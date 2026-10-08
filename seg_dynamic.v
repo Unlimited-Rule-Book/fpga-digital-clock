@@ -40,14 +40,13 @@ output  reg     [7:0]   seg     // 数码管段选信号，初值为点亮数码
 //定义中间变量——数码管数据显示
 reg     [2:0]   cnt_sel;         // 位选信号计数器
 reg     [3:0]   data_disp;       // 为了避免case语句嵌套，增强可读性，定义此变量位段选信号生成的中间变量，此变量不包含小数点
-//定义锁存器——存储sec_clk在seg_clk的上一周期的值
 reg     point_disp;              // 当前数码管显示的小数点
 
 //  ====================  主程序  ====================
 //cnt_sel:位选信号计数器
 always@(posedge sys_clk)
 begin
-    if(~rst_n)
+    if(!rst_n)
         cnt_sel <= 0;
     else if(cnt_sel==3'd5 && pulse_1ms)
         cnt_sel <= 0;
@@ -58,7 +57,7 @@ end
 //data_disp,sel:位选信号生成与控制六个数码管位选信号，使数码管轮流显示
 always@(posedge sys_clk)
 begin
-    if(~rst_n)begin
+    if(!rst_n)begin
         data_disp <= 4'd15; sel <= 6'b11_1111; end    //复位：全显示
     else if(pulse_1ms)begin
         case(cnt_sel)
@@ -77,16 +76,15 @@ end
 //point_disp:为了增强可读性，也为了使对小数点的操作更加灵活，设置小数点寄存器，低电平点亮，所以需要对输入信号取反
 always@(posedge sys_clk)
 begin
-    if(~rst_n)
+    if(!rst_n)
         point_disp <= 1'b0; // 默认小数点点亮
     else if(~point_out_twinkle_en            && pulse_1ms)    point_disp <= ~point_out[cnt_sel];
     else if(point_out_twinkle_en && sec_clk  && pulse_1ms)    point_disp <= ~point_out[cnt_sel];
     else if(point_out_twinkle_en && ~sec_clk && pulse_1ms)    point_disp <= 1'b1;   // 小数点熄灭
-    else                                                     point_disp <= point_disp;
+    else                                                      point_disp <= point_disp;
 end
 
 //seg:控制数码管段选信号，低电平点亮数码管
-//原本的代码采取的是seg_clk上升沿触发
 //由于data_disp的更新和seg的生成是同一时钟上升沿触发的，但seg依赖于data_disp的值，这导致了段选信号比位选信号延迟一个时钟周期
 //所以段选信号改为组合逻辑
 always@(*)
@@ -109,7 +107,7 @@ begin
     4'd14:  seg =   {point_disp,7'b111_1111};   //全灭
     4'd15:  seg =   {point_disp,7'b011_1111};   //显示负号  // 依照现在 alarm 中小时个位加计数进制的逻辑，“负号”的编码必须是F，编码必须是4位，使得加计数能够溢出清零！
     
-    // 请看上方对data_disp复制的case语句，这种逻辑下，disp最大只能是4位宽，无法被赋予15以上的值！！
+    // 请看上方对data_disp赋值的case语句，这种逻辑下，disp最大只能是4位宽，无法被赋予15以上的值！！
     // 所以只能根据现有的需求，将需要的编码，不需要的只能舍弃
     // data_disp也没必要定义成5位宽以增加编码数量了
     

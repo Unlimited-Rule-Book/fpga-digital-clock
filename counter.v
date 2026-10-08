@@ -29,11 +29,11 @@ output  wire    RCO,                // 接下一个模块（下一个 counter �
 output  wire    point_out   // 输出小数点
 );
 
-wire    RCO_add;        // 定义进位信号中间变量，可增强可读性，若为提高执行效率，则可去掉
-wire    RCO_subtract;   // 定义借位信号中间变量，可增强可读性，若为提高执行效率，则可去掉
+wire    RCO_add;        // 定义进位信号中间变量
+wire    RCO_subtract;   // 定义借位信号中间变量
 
 always@(posedge sys_clk)begin
-    if(~rst_n)              // 同步清零，优先级高于计数
+    if(!rst_n)              // 同步清零，优先级高于计数
         count_out <= 0; 
     else if(~load)          // 原本想采用异步置数，但是系统只支持异步清零。后来因为 PLL 锁定信号需要与I/O口输入的复位信号一同控制复位，最终改为同步清零（同步复位）
         count_out <= (load_data > radix_data) ? radix_data : load_data; 

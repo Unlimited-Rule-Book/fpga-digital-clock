@@ -42,16 +42,20 @@ output  wire   button_out       //低电平有效
 
 localparam DEBOUNCE_CNT_MAX = DEBOUNCE_MS - 1;  // 20ms计数值，// 计满 DEBOUNCE_MS 个ms
 
-reg button_sync;                // 同步后的按键信号
+reg button_sync1, button_sync2; // 同步后的按键信号
 reg button_debounced;           //按键消抖后的状态
 reg [$clog2(DEBOUNCE_MS)-1:0] debounce_counter;    // 消抖计数器
 
 // 同步按键输入（避免亚稳态）
 always @(posedge sys_clk) begin
-    if (!rst_n) 
-        button_sync <= 1'b1;  // 默认按键未按下（高电平）
-    else
-        button_sync <= button_in;
+    if (!rst_n) begin
+        button_sync1 <= 1'b1; // 默认按键未按下（高电平）
+        button_sync2 <= 1'b1;
+    end
+    else begin
+        button_sync1 <= button_in;
+        button_sync2 <= button_sync1;
+    end
 end
 
 // 按键消抖逻辑
@@ -62,10 +66,10 @@ always @(posedge sys_clk) begin
         button_debounced <= 1'b1;
     end
     else begin        
-       if (button_sync != button_debounced) begin   // 按键状态变化
+       if (button_sync2 != button_debounced) begin  // 按键状态变化
             if (pulse_1ms) begin
                 if (debounce_counter >= DEBOUNCE_CNT_MAX) begin
-                    button_debounced <= button_sync;    // 更新消抖后状态
+                    button_debounced <= button_sync2;   // 更新消抖后状态
                     debounce_counter <= 0;
                 end
                 else 

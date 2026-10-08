@@ -8,9 +8,9 @@
 //   pulse_1ms : 每1ms输出一个宽度为1个sys_clk周期（20ns）的高脉冲
 //               → 用途：按键消抖计数使能、按键长短按判定计数使能，数码管动态显示的扫描时钟
 //   pulse_1s  : 每1s输出一个宽度为1个sys_clk周期（20ns）的高脉冲
-//               → 用途：驱动 counter 走时
+//               → 用途：驱动 counter 走时, alarm 判断是否到达闹钟时间
 //   sec_clk   : 1Hz，50%占空比时钟
-//               → 用途：seg_dynamic 小数点闪烁
+//               → 用途：seg_dynamic 小数点闪烁, load_num 小数点数字闪烁, alarm 字符闪烁
 //
 // CDC方案：toggle-flag + 三级同步寄存器 + XOR边沿检测
 //   pre_clk域的flag每个计数周期翻转一次，在sys_clk域经三级寄存器同步后，
@@ -36,24 +36,24 @@ module sys_divider #(
     // ----------------------------------------------------------------
     //  pre_clk 域：计数 + toggle flag + sec_clk 生成
     // ----------------------------------------------------------------
-    localparam _1MS_CNT = 1_000;                            // 计满 1000 个pre_clk 周期（每个 1us）= 1ms
+    localparam _1MS_CNT = CLK_FREQ / 1_000;                 // 计满 1000 个pre_clk 周期（每个 1us）= 1ms
     localparam _1MS_MAX = _1MS_CNT - 1;                     // 最大计数值999
     // localparam _1S_FULL_CNT = CLK_FREQ / _1MS_CNT;          // 每1ms自增1，共计1000个数，计满1秒
     // localparam _1S_FULL_MAX = _1S_FULL_CNT - 1;             // 最大计数值999
     localparam _1S_HALF_MAX = CLK_FREQ / _1MS_CNT / 2 - 1;  // 最大计数值499，半秒翻转点
 
     
-    reg [$clog2(_1MS_CNT)-1:0]      ms_cnt;     // 10位1毫秒（秒低位）计数器
-    reg [$clog2(_1S_HALF_MAX)-1:0]  sec_cnt;    // 9位1秒（秒高位）计数器  
+    reg [$clog2(_1MS_CNT)-1:0]      ms_cnt;     // 10位1毫秒计数器（秒低位）
+    reg [$clog2(_1S_HALF_MAX)-1:0]  sec_cnt;    // 9位 1秒计数器  （秒高位）
     reg ms_flag;        // 每毫秒 翻转 一次，用于跨时钟域传递
-    reg sec_flag;       // 每秒 toggle 一次，用于跨时钟域传递
+    reg sec_flag;       // 每半秒 toggle 一次，用于跨时钟域传递
     
     always @(posedge pre_clk) begin
         if (!rst_n) begin
             sec_cnt  <= 0;
             ms_cnt   <= 0;
             ms_flag  <= 1'b0;
-            sec_flag <= 1'b0;
+            sec_flag <= 1'b1;
         end 
         else begin
             if(ms_cnt == _1MS_MAX) begin
@@ -88,9 +88,9 @@ module sys_divider #(
             ms_flag_sync3  <= 1'b0;
             pulse_1ms   <= 1'b0;
             
-            sec_flag_sync1 <= 1'b0;
-            sec_flag_sync2 <= 1'b0;
-            sec_flag_sync3 <= 1'b0;
+            sec_flag_sync1 <= 1'b1;
+            sec_flag_sync2 <= 1'b1;
+            sec_flag_sync3 <= 1'b1;
             pulse_1s    <= 1'b0;
             sec_clk     <= 1'b1;   // 初值与原 divider 一致，为高电平
         end else begin
@@ -102,12 +102,9 @@ module sys_divider #(
             sec_flag_sync2 <= sec_flag_sync1; // 第2级同步（稳定输出）
             sec_flag_sync3 <= sec_flag_sync2; // 第3级，用于边沿检测
             
-            // XOR 边沿检测，上升沿和下降沿都触发（因为 sec_flag 是 toggle）
-            // 每次跳变对应恰好过了1秒，pulse_out 高电平仅持续1个sys_clk周期(20ns)
-            pulse_1ms <= ms_flag_sync2  ^ ms_flag_sync3;
-            
-            pulse_1s  <= sec_flag_sync2 && ~sec_flag_sync3;   // 一定是上升沿检测，这样的话就符合我对 clock 模式下小数点与秒的配合：前半秒小数点亮、后半秒灭
-            
+            // 输出
+            pulse_1ms <= ms_flag_sync2  ^ ms_flag_sync3;    // XOR 边沿检测，上升沿和下降沿都触发(因为 ms_flag 1ms 才反转一次，周期为 2ms, 而 pulse_1ms 周期为 1ms)
+            pulse_1s  <= sec_flag_sync2 && ~sec_flag_sync3; // 一定是上升沿检测，这样的话就符合我对 clock 模式下小数点与秒的配合：前半秒小数点亮、后半秒灭
             sec_clk   <= sec_flag_sync2;
         end
     end

@@ -6,7 +6,7 @@
 //
 // RAM 数据编码（数据位宽12位，地址位宽8位，即深度 256 字）：
 //   bit[11:8] — 八度（3=Oct3, 4=Oct4, 5=Oct5, 0=休止, F=结束标记）
-//   bit[7:4]  — 音名（0=休止, 1=DO, 2=RE, 3=ME, 4=FA, 5=SO, 6=LA, 7=XI, 8=DO# RE♭, 9=RE# ME♭, A=FA# SO♭, B=SO# LA♭, C=LA# XI♭, F=结束标记）
+//   bit[7:4]  — 音名（0=休止, 1=DO, 2=RE, 3=MI, 4=FA, 5=SO, 6=LA, 7=XI, 8=DO# RE♭, 9=RE# MI♭, A=FA# SO♭, B=SO# LA♭, C=LA# XI♭, F=结束标记）
 //   bit[3:0]  — 时值（1=十六分, 2=八分, 3=附点八分, 4=四分,
 //                      6=附点四分, 8=二分, F=一分）
 //   注: bit[11:4] = FF 表示结束标记，结束标记的 bit[3:0] 可任意填写，原因见下：
@@ -44,7 +44,7 @@ output  reg beep
 // 由 50 MHz 系统时钟频率计算得到以下参数
 parameter   DO4 = 18'd190840, DO4_80 = 18'd152672 , DO4_50 = 17'd95420  , DO4_40 = 17'd76336  , DO4_20 = 16'd38168  , DO4_10 = 15'd19084;
 parameter   RE4 = 18'd170068, RE4_80 = 18'd136054 , RE4_50 = 17'd85034  , RE4_40 = 17'd68027  , RE4_20 = 16'd34014  , RE4_10 = 15'd17007;
-parameter   ME4 = 18'd151515, ME4_80 = 17'd121212 , ME4_50 = 17'd75758  , ME4_40 = 16'd60606  , ME4_20 = 15'd30303  , ME4_10 = 14'd15152;
+parameter   MI4 = 18'd151515, MI4_80 = 17'd121212 , MI4_50 = 17'd75758  , MI4_40 = 16'd60606  , MI4_20 = 15'd30303  , MI4_10 = 14'd15152;
 parameter   FA4 = 18'd143266, FA4_80 = 17'd114613 , FA4_50 = 17'd71633  , FA4_40 = 16'd57306  , FA4_20 = 15'd28653  , FA4_10 = 14'd14327;
 parameter   SO4 = 17'd127551, SO4_80 = 17'd102041 , SO4_50 = 16'd63776  , SO4_40 = 16'd51020  , SO4_20 = 15'd25510  , SO4_10 = 14'd12755;
 parameter   LA4 = 17'd113636, LA4_80 =  17'd90909 , LA4_50 = 16'd56818  , LA4_40 = 16'd45454  , LA4_20 = 15'd22727  , LA4_10 = 14'd11364;
@@ -59,7 +59,7 @@ parameter   LA4_HALF = 17'd107259,                    LA4_HALF_50 = 16'd53630;
 // 导致高位被截断。而2的默认位宽是32，使得DO3位宽为32，就不会出现截断。
 parameter   DO3 = DO4*2     , DO3_80 = DO4_80*2   , DO3_50 = DO4_50*2   , DO3_40 = DO4_40*2   , DO3_20 = DO4_20*2   , DO3_10 = DO4_10*2   ;
 parameter   RE3 = RE4*2     , RE3_80 = RE4_80*2   , RE3_50 = RE4_50*2   , RE3_40 = RE4_40*2   , RE3_20 = RE4_20*2   , RE3_10 = RE4_10*2   ;
-parameter   ME3 = ME4*2     , ME3_80 = ME4_80*2   , ME3_50 = ME4_50*2   , ME3_40 = ME4_40*2   , ME3_20 = ME4_20*2   , ME3_10 = ME4_10*2   ;
+parameter   MI3 = MI4*2     , MI3_80 = MI4_80*2   , MI3_50 = MI4_50*2   , MI3_40 = MI4_40*2   , MI3_20 = MI4_20*2   , MI3_10 = MI4_10*2   ;
 parameter   FA3 = FA4*2     , FA3_80 = FA4_80*2   , FA3_50 = FA4_50*2   , FA3_40 = FA4_40*2   , FA3_20 = FA4_20*2   , FA3_10 = FA4_10*2   ;
 parameter   SO3 = SO4*2     , SO3_80 = SO4_80*2   , SO3_50 = SO4_50*2   , SO3_40 = SO4_40*2   , SO3_20 = SO4_20*2   , SO3_10 = SO4_10*2   ;
 parameter   LA3 = LA4*2     , LA3_80 = LA4_80*2   , LA3_50 = LA4_50*2   , LA3_40 = LA4_40*2   , LA3_20 = LA4_20*2   , LA3_10 = LA4_10*2   ;
@@ -72,7 +72,7 @@ parameter   LA3_HALF = LA4_HALF*2,                  LA3_HALF_50 = LA4_HALF_50*2;
     
 parameter   DO5 = DO4/2'd2  , DO5_80 = DO4_80/2'd2, DO5_50 = DO4_50/2'd2, DO5_40 = DO4_40/2'd2, DO5_20 = DO4_20/2'd2, DO5_10 = DO4_10/2'd2;
 parameter   RE5 = RE4/2'd2  , RE5_80 = RE4_80/2'd2, RE5_50 = RE4_50/2'd2, RE5_40 = RE4_40/2'd2, RE5_20 = RE4_20/2'd2, RE5_10 = RE4_10/2'd2;
-parameter   ME5 = ME4/2'd2  , ME5_80 = ME4_80/2'd2, ME5_50 = ME4_50/2'd2, ME5_40 = ME4_40/2'd2, ME5_20 = ME4_20/2'd2, ME5_10 = ME4_10/2'd2;
+parameter   MI5 = MI4/2'd2  , MI5_80 = MI4_80/2'd2, MI5_50 = MI4_50/2'd2, MI5_40 = MI4_40/2'd2, MI5_20 = MI4_20/2'd2, MI5_10 = MI4_10/2'd2;
 parameter   FA5 = FA4/2'd2  , FA5_80 = FA4_80/2'd2, FA5_50 = FA4_50/2'd2, FA5_40 = FA4_40/2'd2, FA5_20 = FA4_20/2'd2, FA5_10 = FA4_10/2'd2;
 parameter   SO5 = SO4/2'd2  , SO5_80 = SO4_80/2'd2, SO5_50 = SO4_50/2'd2, SO5_40 = SO4_40/2'd2, SO5_20 = SO4_20/2'd2, SO5_10 = SO4_10/2'd2;
 parameter   LA5 = LA4/2'd2  , LA5_80 = LA4_80/2'd2, LA5_50 = LA4_50/2'd2, LA5_40 = LA4_40/2'd2, LA5_20 = LA4_20/2'd2, LA5_10 = LA4_10/2'd2;
@@ -91,7 +91,7 @@ wire [11:0]  rd_data; // 从 RAM 里找出来的值
 
 // 编码规则: {octave[3:0], note[3:0], duration[3:0]}
 //bit[11:8] — 八度     (4'd3=Oct3, 4'd4=Oct4, 4'd5=Oct5, 4'd0=休止, 4'd15=结束标记)
-//bit[7:4]  — 音名     (4'd1=DO, 4'd2=RE, 4'd3=ME, 4'd4=FA, 4'd5=SO, 4'd6=LA, 4'd7=XI, 4'd0=休止, 4'd15=结束标记)
+//bit[7:4]  — 音名     (4'd1=DO, 4'd2=RE, 4'd3=MI, 4'd4=FA, 4'd5=SO, 4'd6=LA, 4'd7=XI, 4'd0=休止, 4'd15=结束标记)
 //bit[3:0]   — 时值     (以「一拍」为单位, 1=十六分, 2=八分, 3=附点八分, 4=四分, 6=附点四分, 8=二分, F=一分, 注意休止也可以有时长，但是结束标记没有，因为遇到结束标记，RAM指针就归零)
 // Oct4 = 4'd4, 音名: DO=1~XI=7, 时值: 四分=4, 二分=8
     
@@ -177,7 +177,7 @@ begin
         case(rd_data[11:4])                                    
         8'h31 : begin    freq_data <= DO3;      duty_data <= DO3_50; end
         8'h32 : begin    freq_data <= RE3;      duty_data <= RE3_50; end
-        8'h33 : begin    freq_data <= ME3;      duty_data <= ME3_50; end
+        8'h33 : begin    freq_data <= MI3;      duty_data <= MI3_50; end
         8'h34 : begin    freq_data <= FA3;      duty_data <= FA3_50; end
         8'h35 : begin    freq_data <= SO3;      duty_data <= SO3_50; end
         8'h36 : begin    freq_data <= LA3;      duty_data <= LA3_50; end
@@ -190,7 +190,7 @@ begin
                                                                
         8'h41 : begin    freq_data <= DO4;      duty_data <= DO4_50; end
         8'h42 : begin    freq_data <= RE4;      duty_data <= RE4_50; end
-        8'h43 : begin    freq_data <= ME4;      duty_data <= ME4_50; end
+        8'h43 : begin    freq_data <= MI4;      duty_data <= MI4_50; end
         8'h44 : begin    freq_data <= FA4;      duty_data <= FA4_50; end
         8'h45 : begin    freq_data <= SO4;      duty_data <= SO4_50; end
         8'h46 : begin    freq_data <= LA4;      duty_data <= LA4_50; end
@@ -203,7 +203,7 @@ begin
                                                                
         8'h51 : begin    freq_data <= DO5;      duty_data <= DO5_50; end
         8'h52 : begin    freq_data <= RE5;      duty_data <= RE5_50; end
-        8'h53 : begin    freq_data <= ME5;      duty_data <= ME5_50; end
+        8'h53 : begin    freq_data <= MI5;      duty_data <= MI5_50; end
         8'h54 : begin    freq_data <= FA5;      duty_data <= FA5_50; end
         8'h55 : begin    freq_data <= SO5;      duty_data <= SO5_50; end
         8'h56 : begin    freq_data <= LA5;      duty_data <= LA5_50; end

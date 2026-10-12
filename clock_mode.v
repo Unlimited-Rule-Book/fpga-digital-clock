@@ -168,7 +168,7 @@ wire    num_down_db;
 wire    load_db;
 // 按键消抖模块接口已改为pulse_1ms计数，参数单位为ms
 btn_debounce #(.DEBOUNCE_MS(20))
-    // DEBOUNCE_MS不可设为1ms，否则在模块内部DEBOUNCE_CNT_MAX会变成0，导致1.消抖逻辑失效；2.debounce_counter的位宽会变成[-1,0]，被系统解析为1bit
+    // DEBOUNCE_MS不可设为1ms，否则在模块内部DEBOUNCE_CNT_MAX会变成0，导致1.消抖逻辑失效；2.debounce_counter的位宽会变成[-1,0]（2位宽）而非期望的1位宽
     clock_mode_btn_debounce_choose   (sys_clk, pulse_1ms, rst_n, choose, choose_db),    // 这个 choose 是对 load_num 产生的，只有短按判定。
     clock_mode_btn_debounce_num_up   (sys_clk, pulse_1ms, rst_n, num_up, num_up_db),
     clock_mode_btn_debounce_num_down (sys_clk, pulse_1ms, rst_n, num_down, num_down_db),

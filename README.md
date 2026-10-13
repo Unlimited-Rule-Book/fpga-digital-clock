@@ -1,8 +1,14 @@
-﻿# 数显时钟的FPGA开发
+﻿<div align="center">
 
-[English](README.en.md)
+# 数显时钟的FPGA开发
+
+**简体中文** · [English](README.en.md)
+
+</div>
 
 > 基于 Verilog 的 FPGA 数显时钟，支持走时、置数与闹钟功能。
+> 
+> 本项目是我自学 Verilog 的阶段性作品，很多设计在实际工程里未必适用，[点击这里查看完整开发历程](HISTORY.md)。
 
 ## 目录
 - [数显时钟的FPGA开发](#数显时钟的fpga开发)

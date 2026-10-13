@@ -1,10 +1,14 @@
+<div align="center">
+
 # FPGA-Based Multifunction Digital Clock
 
-[简体中文](README.md)
+[简体中文](README.md) · **English**
+
+</div>
 
 > A multifunction digital clock written in Verilog HDL for an FPGA. It shows the time on a 6-digit 7-segment display and supports timekeeping, time setting and alarms.
-
-<!-- TODO: **考虑是否添加个人情况说明：本项目属于自学verilog后的阶段性检测，很多设计在实际工程中可能并不适用**-->
+> 
+> This project is a mailstone in my self-study of Verilog, so somr of this design choiced may not suit real-worlf engineering. For how it came about, see the [development history](HISTORY.en.md). 
 
 ## Contents
 - [FPGA-Based Multifunction Digital Clock](#fpga-based-multifunction-digital-clock)

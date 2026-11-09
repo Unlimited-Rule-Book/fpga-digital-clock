@@ -1,6 +1,6 @@
 // =============================================================================
 // 文件名：alarm.v
-// 功能：闹钟浏览、编辑与时间匹配模块，支持4组闹钟
+// 功能：闹钟浏览、编辑与时间匹配模块，默认为4个闹钟，最多可设置10个，可在顶层 clock_mode 中设置
 //
 // 工作流程：
 //   1. 由 clock_mode 的 mode_alarm_en 使能后进入工作状态
@@ -30,7 +30,6 @@
 //
 // 子模块实例：
 //   counter ×4（分别编辑 hour 个位/十位、minute 个位/十位）
-//   bin2bcd_param ×1（闹钟编号 → BCD 显示）
 //
 // 注意：
 //   1. alarm_ring_en 的拉高(使能) 和 拉低(不使能) 分支在同一时钟沿判断, 拉低 分支读到的是沿前的信号值：
@@ -43,7 +42,9 @@
 //   5. beep_idx 在时间匹配循环中被赋值（记录触发闹钟编号），在鸣响显示模式下用于从 alarm_mem 读取正确的闹钟时间进行闪烁显示
 //   6. sec_clk_div 是 sec_clk 的二分频信号（跳沿检测产生），实现鸣响显示时的 0.5Hz 慢闪烁（比编辑模式的 sec_clk 直接闪烁慢一半）
 // =============================================================================
-module alarm
+module alarm #(
+parameter  ALARM_CNT = 4
+)
 (
 input   wire    mode_en,
 input   wire    sys_clk,
@@ -135,9 +136,8 @@ end
 
 // ALARM_VIEW 状态下浏览不同alarm
 // RAM 建模
-parameter  ALARM_CNT = 4;
-reg [16:0] alarm_mem [0:ALARM_CNT-1'b1];   // 一共有4个可设置闹钟，地址位宽为2；一共用17位，第一位表示是否使能，后16位为4个BCD编码表示要设置的小时、分钟，秒默认为0，后面把这个写死。
-reg [$clog2(ALARM_CNT)-1:0]  alarm_num;       // 闹钟的编号，也是地址线。
+reg [16:0] alarm_mem [0:ALARM_CNT-1'b1];// 最多有10个可设置闹钟，地址位宽最大为4；RAM一共用17位，第一位表示是否使能，后16位为4个BCD编码表示要设置的小时、分钟，秒默认为0，后面把这个写死。
+reg [$clog2(ALARM_CNT)-1:0]  alarm_num; // 闹钟的编号，也是地址线。
 // ALARM_VIEW 状态下的显示
 // 闹钟时间
 reg [15:0]  view_num;   // 用于暂存被选中的地址下的闹钟时间,只是为了表示起来方便
@@ -168,12 +168,6 @@ begin
         alarm_state_show = SHOW_DEFAULT;
 end
 endfunction
-// 闹钟编号
-wire    [3:0]  alarm_num_bcd;
-bin2bcd_param #( .BIN_WIDTH($clog2(ALARM_CNT)) ) alarm_bin2bcd_param(
-    .bin        (alarm_num),
-    .bcd        (alarm_num_bcd)
-);
 
 
 
@@ -435,7 +429,7 @@ assign  load_point[5:4] = 2'b00; // state 两位不显示小数点
 // 变量声明： twinkle TWINKLE_STATE 等信号的声明在上一个时分秒计数脉冲状态机，主要是这些变量受该状态机控制
 // 控制置数时的数字显示，当 mode_en 使能时，将当前时刻时钟的值赋予 ready_*
 wire    [7:0]   ready_state_show;       // 增强可读性
-assign  ready_state_show = {alarm_num_bcd, alarm_state_show(edit_state)};
+assign  ready_state_show = {alarm_num, alarm_state_show(edit_state)};
 always@(posedge sys_clk)
 begin
 if(!rst_n)begin
@@ -448,7 +442,7 @@ else begin
         TWINKLE_STATE:
         begin
             ready_hour <= edit_hour;         ready_minute <= edit_minute;
-            if(sec_clk)         ready_state <= {alarm_num_bcd,SHOW_EMPTY};
+            if(sec_clk)         ready_state <= {alarm_num,SHOW_EMPTY};
             else if(~sec_clk)   ready_state <= ready_state_show;
         end
         TWINKLE_HOUR:
@@ -465,7 +459,7 @@ else begin
         end
         default: begin  // 与TWINKLE_STATE相同
             ready_hour <= edit_hour; ready_minute <= edit_minute;
-            if(sec_clk)         ready_state <= {alarm_num_bcd,SHOW_EMPTY};
+            if(sec_clk)         ready_state <= {alarm_num,SHOW_EMPTY};
             else if(~sec_clk)   ready_state <= ready_state_show;
         end
     endcase
@@ -549,7 +543,7 @@ end
 // 数显控制，模式为 ALARM_VIEW 时，显示 alarm_mem 的值；模式为 ALARM_EDIT 时显示ready_*；
 //           闹钟响铃时，输出闹钟的时间。
 //           其它情况，输出为负号--（seg_dynamic编码，F 4'd15为负号）
-assign  disp_state  = (mode_en && current_alarm==ALARM_VIEW) ? {alarm_num_bcd, alarm_state_show(alarm_mem[alarm_num][16])} : 
+assign  disp_state  = (mode_en && current_alarm==ALARM_VIEW) ? {alarm_num, alarm_state_show(alarm_mem[alarm_num][16])} : 
                       (mode_en && current_alarm==ALARM_EDIT) ? ready_state      :
                       (~mode_en&& alarm_beep_disp_en)        ? beep_hour        :
                       8'hFF;   // 增加出现其它情况时的保护

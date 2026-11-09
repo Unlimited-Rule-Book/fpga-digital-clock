@@ -680,7 +680,7 @@ load_num    clock_mode_load_num
 //闹钟模式实例化
 // alarm 模块输出：闹钟该响了的脉冲使能信号
 wire    alarm_ring_en;
-alarm       clock_mode_alarm
+alarm#(.ALARM_CNT(4))   clock_mode_alarm    // ALARM_CNT: 最多可设置10个闹钟
 (
     .mode_en        (mode_alarm_en      ),
     .sys_clk        (sys_clk            ),

@@ -24,6 +24,7 @@
   - [Design Overview](#design-overview)
   - [Key Mapping](#key-mapping)
   - [Notes](#notes)
+  - [License](#license)
 
 ## Development Environment
 
@@ -117,18 +118,18 @@ Change the song:
 - ✅ Clock mode: Displays the time as hours, minutes and seconds. The decimal points blink at 1 Hz. 
 - ✅ Time-setting mode (`load_num`): Short-press `load` to enter this mode. The 7-segment display first shows `LOAd` for about 1 second as a prompt. Then users can set the time in the editing view and long-press `load` to confirm. If no button is pressed for 15 seconds, the display returns to clock mode and the edit is discarded. 
 	- Actually, the duration is not 15 seconds. Firstly, the prompt `LOAd` takes (0.5, 1] seconds. Secondly, the 15-second timeout counter (`counter_15s`) is enabled by `pulse_1s`, which is not aligned with the moment `load` is pressed, so its first tick comes 0-1 seconds later. As a result, the editing view stays on screen for only 13-14.5 seconds before the display returns to clock mode. 
-- ✅ Alarm mode: Four alarms (set by the `ALARM_CNT` parameter), each of which can be enabled or disabled. Users can set the hour and minute, while the seconds are fixed at 00. 
+- ✅ Alarm mode: Four alarms by default (adjustable through the `ALARM_CNT` parameter in `clock_mode.v`, up to ten), each of which can be enabled or disabled. Users can set the hour and minute, while the seconds are fixed at 00. Note: The alarm number starts from 0. 
 - ✅ Alarm ringing: When an alarm triggers, the passive buzzer plays the song stored in the linked `.mif` (_Your New Home_ by default, or users can choose _Qi Feng Le_) on a loop and stops automatically after 59 seconds. Press `choose`, `num_up` or `num_down` to stop it early. 
 - ✅ Ringing display: If the display is in clock mode when an alarm triggers, the 7-segment display switches to the ringing display, which shows the time of the ringing alarm and blinks slowly at 0.5 Hz. 
 
 ## Features
 
-- **One module is instantiated in three modules**: `counter.v` is a generic BCD up/down counter. The radix (the counting limit, e.g. 9 for a decimal digit, 5 for the tens digit of minutes) is decided by the port `radix_data`. This module is instantiated 16 times in total (6 in `clock.v`, 6 in `load_num.v`, 4 in `alarm.v`). Each digit has its own counter, so the counter outputs are already in BCD, and no binary-to-BCD conversion is needed for the time digits. 
+- **One module is instantiated in three modules**: `counter.v` is a generic BCD up/down counter. The radix (the counting limit, e.g. 9 for a decimal digit, 5 for the tens digit of minutes) is decided by the port `radix_data`. This module is instantiated 16 times in total (6 in `clock.v`, 6 in `load_num.v`, 4 in `alarm.v`). Each digit has its own counter, so the counter outputs are already in BCD, and no binary-to-BCD conversion is needed. 
 - **Variable-radix**: Because each digit has its own counter, each digit's radix is set independently. This is a problem for the units digit of the hour: when the tens digit is 0/1 it counts 0-9, but when the tens digit is 2 it counts only 0-3 (20-23). Taking `clock.v` as an example: during normal timekeeping, the radix of the hour's units digit (`radix_hour`) is selected by the tens-digit counter's output (`out_hour[7:4]`); during time setting, it is selected by the tens digit of the value being loaded (`data_hour[7:4]`). 
 	- Similar handling is also used in `load_num.v` and `alarm.v`; this is the trickiest part of the whole project. 
 - **Clock domain crossing**: The PLL's 1 MHz output (`pre_clk` domain) and 50 MHz `sys_clk` are two clock domains. Signals generated in `pre_clk` are used in `sys_clk` logic. To avoid metastability, the crossing uses a toggle flag, a two-flop synchronizer and an edge detector (in `sys_divider.v`, and in the 1 ms timebase of `btn_duration.v`). 
 - **State machine**: The state machines are widely used in this project: `clock_mode.v` and `btn_duration.v` use the three-always-block finite-state machine (FSM) style (state register, next-state logic, output logic), while `load_num.v` and `alarm.v` each use three cooperating state machines. 
-- **Parameterized width**: Some counter bit widths are computed with `$clog2`. The debounce time `DEBOUNCE_MS` and the long-press and short-press thresholds `SHORT_END_MS`, `LONG_PRESS_MS` set the widths of their counters, and `BIN_WIDTH` sets the binary input width of `bin2bcd_param.v`. 
+- **Parameterized width**: Some counter bit widths are computed with `$clog2`. The debounce time `DEBOUNCE_MS` and the long-press and short-press thresholds `SHORT_END_MS`, `LONG_PRESS_MS` set the widths of their counters. 
 
 ## Design Overview
 
@@ -204,3 +205,7 @@ flowchart TB
 - `alarm.v` drives `alarm_ring_en` high for 1 second. `clock_mode.v` uses it to start `counter_beep`, a seconds counter that runs until 59; `beep_en` stays high until then and enables `beep_song.v`. 
 - The data flow for the ringing display: `alarm.v` records the alarm number in `beep_idx` and drives `alarm_ring_en` high. Receiving the `alarm_ring_en` signal, `clock_mode.v` drives `alarm_beep_disp_en` high, which `alarm.v` then detects. `alarm.v` outputs the time of the ringing alarm (whose index is `beep_idx`) on the `disp_*` ports to `clock_mode.v`. Finally, `seg_dynamic.v` receives those `disp_*` signals and displays the alarm time. 
 - `btn_duration.v` classifies each button press as short or long. If the duration of pressing is no more than 500 ms, it is a short press. If the duration of pressing reaches 3 s, it is a long press. If the duration is between the two thresholds, it is invalid. Because the button is debounced first (20 ms), a long press fires about 20 ms after the 3 s mark, counted from the physical press; the short-press threshold is unaffected because the debouncer delays the press and the release equally. 
+
+## License
+
+This project is licensed under the [MIT License](LICENSE). The `.mif` score files in `beep/` are transcriptions of third-party songs, included for learning purposes only. Their copyrights belong to the original rights holders, and they are not covered by this license.

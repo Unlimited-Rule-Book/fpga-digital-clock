@@ -6,7 +6,7 @@
 
 ## Timeline
 
-- Summer break 2024: I started learning Verilog following EmbedFire's tutorials. Just before the new semester, I wrote the "first version" of my digital clock, with all the code crammed into a single file. I neither finished it nor tested it on my development board. 
+- Summer break 2024: I started learning Verilog following EmbedFire's tutorials. Just before the new semester, I wrote the "first version" of my digital clock. (I neither finished it nor tested it on my development board.)
 - Winter break 2025 (Jan-Feb): I scrapped my earlier design and started over. Starting from drawing block diagrams, I adopted a modular design approach. I wrote a generic BCD up/down counter `counter.v`, and then `clock.v`, which solved the hour's units digit variable-radix problem for plain timekeeping, without time setting. 
 - Spring semester 2025: I took _Fundamentals of Digital Electronics_, which touched on Verilog a little, and made some changes to the code. 
 - Summer break 2025: 
@@ -22,20 +22,20 @@
   - Then in only about three days, I reworked `load_num.v` into `alarm.v` and solved the hour's units digit variable-radix problem with time setting involved, which laid the groundwork for solving the similar problems in `clock.v` and `load_num.v`. 
 - Fall semester 2026: I prepared to open-source the project: fixing bugs, completing the comments and writing the README and HISTORY files in both Chinese and English. 
 
-## Development experience and lessons
+## Development Experience and Lessons
 
+I taught myself Verilog during summer break 2024, following EmbedFire's tutorials. Just before the end of the break, I came up with the idea of writing a digital clock to test what I had learned. So I crammed everything I wanted into a single file, which was spaghetti code. Since I was unfamiliar with Verilog and lacked experience in building a project from scratch, I neither finished it nor tested it on a board. 
 
-屎山代码：spaghetti code（或口语的 a big ball of mud）。
-一个巨大的 if-else：one giant if-else chain。
-带自校验的 testbench：self-checking testbench。
-按键没反应：the buttons did nothing on the board。
-板上验证：on-board bring-up / on-board verification。
-阶段性检测：a checkpoint of my self-study。
-可读性、维护性差：hard to read and maintain
-门控-控制模式切换：AND-OR gating - switch modes
-按键资源紧张、复用 `load` 键：I was short of buttons, so I reused `load` for several functions
-这都怪我没有验证习惯：That was my own fault: I had never built the habit of verifying my work
-数码管开始频闪：the 7-segment display began to flicker
-「if-else」的锅：the culprit was still the giant if-else chain（`culprit` 比 `blame` 自然）
-节省了 43% 的 FF：reduced flip-flop (FF) usage by 43%
-变进制问题：variable-radix problem
+During winter break 2025, I scrapped the old design and planned much more carefully. Following a modular design approach, I first wrote the basic module `counter.v` and then built other modules on top of it. I also decided to give each digit its own counter, so the outputs are already BCD and do not need binary-to-BCD conversion. Since timekeeping, time setting and alarm all need counters, I first instantiated six `counter.v` in `counter_time.v` (the display has six digits, so six counters are needed) and instantiated `counter_time.v` in `clock.v`. I also planned to instantiate `counter_time.v` in the time-setting and alarm modules. But later, I found that different modules need different signals connected to `counter.v`, because of the variable-radix problem of the hour's units digit. So I instantiated `counter.v` directly in `clock.v`, `load_num.v` and `alarm.v`, and deleted `counter_time.v`. Overall, I tried many times to put the modular design approach into practice. It is a pity that I didn't use Git to track the code. But fortunately, I saved the code of the `clock` era and created a new folder to start the `clock_mode` era. 
+
+In late July 2025, the project entered the `clock_mode` era. In the following development, I put the state machines I learned in class into practice, and truly understood how powerful state machines can be. 
+- In the top-level module `clock_mode.v`, I first used enable signals to switch between modes. Later, I realized that it was a bad design, so I refactored it into a one-always-block state machine and later into a three-always-block one, which I still use today. 
+- While developing `load_num.v`, I was short of buttons, so I reused the `load` button for two functions, distinguished by a long or short press. To do this, I wrote `button_stabilization_long_short.v`, which was more spaghetti code. As its name suggests, this module combined button debouncing and long/short-press detection. Moreover, the long/short-press detection was not a state machine like today's version, but one huge `if-else` chain: the logic for a press went in the `if` branch and the logic for a release went in the `else` branch. It was hard to read and maintain, but I couldn't think of a better way at the time. The spaghetti code had many bugs and they were hard to find. These bugs made the `load` button do nothing on the board and my project almost came to a standstill for several months. Looking back, I think I made several mistakes: 
+  1. I didn't have a good habit of verifying my work. Because I had a development board and could test directly on it, I was too lazy to write testbenches. 
+  2. I wasn't familiar with the simulation workflow, so I found it troublesome. Besides, a 1 Hz clock is very slow compared with the 50 MHz oscillator frequency, which made it difficult to see the waveform in the simulation tool. And I didn't know about self-checking testbenches until I took _Digital System Design Based on Verilog_ in spring semester 2026. 
+  3. I was too confident in `button_stabilization_long_short.v`, so I only simulated the whole project and didn't simulate that module on its own. 
+  4. Later, I learned that a state machine could replace the `if-else` chain. But I didn't refactor it, because I was afraid of state machines and obsessed with hunting bugs in `if-else`. I only decided to refactor it after I had found all the bugs and the whole project was almost finished. Once I refactored it into a state machine, I found it surprisingly easy. 
+  5. In fact, I didn't need to build button debouncing into the long/short-press module, because a debouncing module already existed. I could have passed all buttons through `btn_debounce.v` first and sent only the signals that need press detection to `btn_duration.v`. That is modular design too. 
+  6. I named the module after its function without much thought. `button_stabilization_long_short.v` is literally accurate but terrible for readability, so I renamed it `btn_duration.v` after I removed the debouncing part. Thanks to AI, we beginners can ask for help when we are unsure. 
+
+After I learned Git, things took a turn for the better in spring semester 2026. While asking DeepSeek about the performance of my chip, I happened to learn about PLLs. So I added a PLL to my project and reduced flip-flop (FF) usage by 43%, which also reignited my passion for coding. After checking over and over again, I finally realized that I had never written a testbench for `button_stabilization_long_short.v`. Guided by simulation, I modified the code, and the `load` button finally responded. But the 7-segment display began to flicker. I first thought there were problems in `seg_dynamic.v`, but the culprit was still the giant `if-else` chain. After several rounds of changes, I finally fixed all the bugs in the `if-else` chain, and `load_num.v` passed on-board verification. 

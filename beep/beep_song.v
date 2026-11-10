@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Unlimited-Rule-Book
 // =============================================================================
 // 文件名：beep_song.v
 // 功能：蜂鸣器乐曲播放模块，基于 RAM IP 核 + PWM 分频

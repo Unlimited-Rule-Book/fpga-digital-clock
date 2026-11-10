@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Unlimited-Rule-Book
 // =============================================================================
 // 文件名： btn_duration.v
 // 功能：按键长/短按判定模块（单键，低电平按下）

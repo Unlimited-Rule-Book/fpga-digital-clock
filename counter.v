@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Unlimited-Rule-Book
 // =============================================================================
 // 文件名：counter.v
 // 功能：通用 BCD N 进制加减计数器，支持多个 counter 级联，

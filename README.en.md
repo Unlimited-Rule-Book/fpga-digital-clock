@@ -24,6 +24,7 @@
   - [Design Overview](#design-overview)
   - [Key Mapping](#key-mapping)
   - [Notes](#notes)
+  - [Acknowledgements](#acknowledgements)
   - [License](#license)
 
 ## Development Environment
@@ -206,6 +207,13 @@ flowchart TB
 - The data flow for the ringing display: `alarm.v` records the alarm number in `beep_idx` and drives `alarm_ring_en` high. Receiving the `alarm_ring_en` signal, `clock_mode.v` drives `alarm_beep_disp_en` high, which `alarm.v` then detects. `alarm.v` outputs the time of the ringing alarm (whose index is `beep_idx`) on the `disp_*` ports to `clock_mode.v`. Finally, `seg_dynamic.v` receives those `disp_*` signals and displays the alarm time. 
 - `btn_duration.v` classifies each button press as short or long. If the duration of pressing is no more than 500 ms, it is a short press. If the duration of pressing reaches 3 s, it is a long press. If the duration is between the two thresholds, it is invalid. Because the button is debounced first (20 ms), a long press fires about 20 ms after the 3 s mark, counted from the physical press; the short-press threshold is unaffected because the debouncer delays the press and the release equally. 
 
+## Acknowledgements
+
+- Thanks to EmbedFire for its FPGA tutorials and example code. 
+- Thanks to my university teachers. 
+- Thanks to my family for their support. 
+- Thanks to AI tools such as DeepSeek for their suggestions and help with code review, header comments and documentation. 
+
 ## License
 
-This project is licensed under the [MIT License](LICENSE). The `.mif` score files in `beep/` are transcriptions of third-party songs, included for learning purposes only. Their copyrights belong to the original rights holders, and they are not covered by this license.
+This project is licensed under the [MIT License](LICENSE). The `.mif` score files in `beep/` are transcriptions of third-party songs, included for learning purposes only. Their copyrights belong to the original rights holders, and they are not covered by this license. `hc595_ctrl.v` and `seg_dynamic.v` are modified from EmbedFire's tutorial code. The original code states no license, and its original portions remain the property of EmbedFire; they are not covered by the MIT License above. 

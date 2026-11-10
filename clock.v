@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Unlimited-Rule-Book
 // =============================================================================
 // 文件名：clock.v
 // 功能：

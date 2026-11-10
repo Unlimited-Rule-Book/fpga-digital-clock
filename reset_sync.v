@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Unlimited-Rule-Book
 // =============================================================================
 // 文件名：reset_sync.v
 // 功能：同步复位器，异步断言，同步释放，兼顾PLL锁定

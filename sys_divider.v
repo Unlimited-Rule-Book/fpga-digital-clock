@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Unlimited-Rule-Book
 // =============================================================================
 // 文件名：sys_divider.v
 // 功能：系统多输出分频器（由 pulse_sec.v 扩展重命名而来）

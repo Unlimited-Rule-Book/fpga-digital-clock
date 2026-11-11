@@ -122,6 +122,7 @@ Change the song:
 - ✅ Alarm mode: Four alarms by default (adjustable through the `ALARM_CNT` parameter in `clock_mode.v`, up to ten), each of which can be enabled or disabled. Users can set the hour and minute, while the seconds are fixed at 00. Note: The alarm number starts from 0. 
 - ✅ Alarm ringing: When an alarm triggers, the passive buzzer plays the song stored in the linked `.mif` (_Your New Home_ by default, or users can choose _Qi Feng Le_) on a loop and stops automatically after 59 seconds. Press `choose`, `num_up` or `num_down` to stop it early. 
 - ✅ Ringing display: If the display is in clock mode when an alarm triggers, the 7-segment display switches to the ringing display, which shows the time of the ringing alarm and blinks slowly at 0.5 Hz. 
+- Photos of each function running on the board are in the [v1.0.0 release](https://github.com/Unlimited-Rule-Book/fpga-digital-clock/releases/tag/v1.0.0).
 
 ## Features
 
